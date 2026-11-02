@@ -1,0 +1,5 @@
+﻿# 构建产物与临时文件
+AI公司大作战-单文件.html
+game.html
+backups/
+*.log

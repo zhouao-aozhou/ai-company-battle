@@ -1,0 +1,195 @@
+﻿<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><style>html,body{margin:0;background:#e9e6df;overflow:hidden}canvas{display:block}</style></head>
+<body>
+<script type="module">
+import * as THREE from "./three.module.js";
+
+const q = new URLSearchParams(location.search);
+const DEPT = q.get("dept") || "claude";
+
+const W = 1200, H = 820;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H);
+renderer.setPixelRatio(1);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.02;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xece9e2);
+
+const cam = new THREE.OrthographicCamera(-7.7, 7.7, 5.26, -5.26, 0.1, 200);
+cam.position.set(11, 11, 11);
+cam.lookAt(-0.3, 0.9, 0.5);
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0xd9d3c7, 1.2));
+const sun = new THREE.DirectionalLight(0xfff3dd, 2.1);
+sun.position.set(7, 14, 5);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -10; sun.shadow.camera.right = 10;
+sun.shadow.camera.top = 10; sun.shadow.camera.bottom = -10;
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 50;
+sun.shadow.bias = -0.0006;
+scene.add(sun);
+const fill = new THREE.DirectionalLight(0xdfe8ff, 0.5);
+fill.position.set(-7, 8, -5);
+scene.add(fill);
+
+// 部门主题色
+const THEME = {
+  claude:   { accent: 0xe08a5a, wall: 0xf3efe7, floor: 0xe6d9c2, rug: 0xf0e3d6, prop: "shelf" },
+  deepseek: { accent: 0x4f7fbf, wall: 0xeef1f5, floor: 0xdfe3e9, rug: 0xdde7f2, prop: "server" },
+  gemini:   { accent: 0x9a7fc4, wall: 0xf4f0f6, floor: 0xe4ddea, rug: 0xeae2f3, prop: "board" },
+  grok:     { accent: 0xd9642f, wall: 0xf1ece6, floor: 0xe3d8ca, rug: 0xf2e2d5, prop: "poster" },
+  chatgpt:  { accent: 0x40a86e, wall: 0xedf3ee, floor: 0xdfe8df, rug: 0xddeee2, prop: "cabinet" },
+}[DEPT] || {};
+
+const M = {
+  wall: new THREE.MeshStandardMaterial({ color: THEME.wall, roughness: .95 }),
+  wallSide: new THREE.MeshStandardMaterial({ color: new THREE.Color(THEME.wall).multiplyScalar(0.95), roughness: .95 }),
+  floor: new THREE.MeshStandardMaterial({ color: THEME.floor, roughness: .95 }),
+  base: new THREE.MeshStandardMaterial({ color: 0xcfc9bc, roughness: .9 }),
+  deskTop: new THREE.MeshStandardMaterial({ color: 0xf7f4ee, roughness: .8 }),
+  deskEdge: new THREE.MeshStandardMaterial({ color: 0xdfd9cc, roughness: .85 }),
+  metal: new THREE.MeshStandardMaterial({ color: 0x5a6a82, roughness: .55, metalness: .35 }),
+  dark: new THREE.MeshStandardMaterial({ color: 0x3a4352, roughness: .7 }),
+  screen: new THREE.MeshStandardMaterial({ color: 0x6f8fb8, roughness: .35, emissive: 0x223a55, emissiveIntensity: .4 }),
+  pot: new THREE.MeshStandardMaterial({ color: 0xe8e3d8, roughness: .9 }),
+  leaf: new THREE.MeshStandardMaterial({ color: 0x6aa87a, roughness: .85 }),
+  leaf2: new THREE.MeshStandardMaterial({ color: 0x84bf8e, roughness: .85 }),
+  rug: new THREE.MeshStandardMaterial({ color: THEME.rug, roughness: 1 }),
+  accent: new THREE.MeshStandardMaterial({ color: THEME.accent, roughness: .6 }),
+  wood: new THREE.MeshStandardMaterial({ color: 0xc8b79a, roughness: .9 }),
+  paper: new THREE.MeshStandardMaterial({ color: 0xfbfaf6, roughness: .8 }),
+};
+
+const add = (m) => { m.castShadow = true; m.receiveShadow = true; scene.add(m); return m; };
+const box = (w,h,d,mat,x,y,z) => add(new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat)).position.set(x,y,z);
+
+// 地面 / 墙
+box(13, 0.4, 11, M.floor, 0, -0.2, 0);
+box(13, 6.4, 0.4, M.wall, 0, 3.0, -5.5);
+box(0.4, 6.4, 11, M.wallSide, -6.5, 3.0, 0);
+box(13, 0.45, 0.5, M.base, 0, 0.22, -5.3);
+box(0.5, 0.45, 11, M.base, -6.3, 0.22, 0);
+
+// 地毯
+const rug = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.04, 6.6), M.rug);
+rug.position.set(0, 0.03, 0.4); rug.receiveShadow = true; scene.add(rug);
+
+// 家具构件
+function desk(x, z, rotY) {
+  const g = new THREE.Group();
+  box(2.6, 0.16, 1.4, M.deskTop, 0, 1.42, 0); g.add(scene.children.pop());
+  box(2.7, 0.1, 1.5, M.deskEdge, 0, 1.32, 0); g.add(scene.children.pop());
+  [[-1.15,-0.58],[1.15,-0.58],[-1.15,0.58],[1.15,0.58]].forEach(([lx,lz]) => {
+    box(0.11, 1.3, 0.11, M.metal, lx, 0.65, lz); g.add(scene.children.pop());
+  });
+  box(1.15, 0.72, 0.07, M.dark, 0, 2.2, -0.32); g.add(scene.children.pop());
+  box(1.05, 0.6, 0.02, M.screen, 0, 2.2, -0.28); g.add(scene.children.pop());
+  box(0.4, 0.05, 0.26, M.dark, 0, 1.5, -0.32); g.add(scene.children.pop());
+  box(0.9, 0.05, 0.3, M.deskEdge, 0, 1.52, 0.32); g.add(scene.children.pop());
+  box(0.19, 0.22, 0.19, M.wood, 1.0, 1.62, 0.22); g.add(scene.children.pop());
+  g.position.set(x, 0, z); g.rotation.y = rotY || 0;
+  g.children.forEach(c => { c.castShadow = true; c.receiveShadow = true; });
+  scene.add(g);
+  return g;
+}
+
+function chair(x, z, rotY) {
+  const g = new THREE.Group();
+  box(0.9, 0.13, 0.9, M.dark, 0, 0.92, 0); g.add(scene.children.pop());
+  box(0.9, 0.9, 0.13, M.dark, 0, 1.36, -0.4); g.add(scene.children.pop());
+  box(0.95, 0.9, 0.1, M.accent, 0, 1.36, -0.48); g.add(scene.children.pop());
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,0.88,8), M.metal);
+  pole.position.y = 0.44; g.add(pole);
+  const bs = new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.44,0.08,12), M.metal);
+  bs.position.y = 0.06; g.add(bs);
+  g.position.set(x, 0, z); g.rotation.y = rotY || 0;
+  g.children.forEach(c => { c.castShadow = true; c.receiveShadow = true; });
+  scene.add(g);
+  return g;
+}
+
+function plant(x, z, s) {
+  s = s || 1;
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.38*s, 0.3*s, 0.55*s, 14), M.pot);
+  pot.position.set(x, 0.275*s, z); add(pot);
+  const spots = [[0,1.25,0,.5],[-.32,.98,.18,.36],[.3,1.0,-.14,.38],[.04,1.6,.08,.3]];
+  spots.forEach(([dx,dy,dz,r],i) => {
+    const l = new THREE.Mesh(new THREE.SphereGeometry(r*s, 12, 10), i%2 ? M.leaf : M.leaf2);
+    l.position.set(x+dx*s, dy*s, z+dz*s); l.scale.y = 0.86; add(l);
+  });
+}
+
+// 部门专属道具
+function specialProp() {
+  if (THEME.prop === "shelf") {
+    box(0.7, 3.0, 2.6, M.deskTop, -5.9, 1.5, -1.6);
+    for (let i=1;i<4;i++) box(0.62, 0.07, 2.4, M.deskEdge, -5.9, i*0.75, -1.6);
+    for (let i=0;i<6;i++) box(0.18, 0.5, 0.34, [M.accent, M.wood, M.paper][i%3],
+      -4.2 + (i%4)*0.55, 0.75*Math.floor(i/2)+1.05, -4.85);
+  } else if (THEME.prop === "server") {
+    box(1.5, 3.4, 1.5, M.dark, -4.9, 1.7, -3.6);
+    for (let i=0;i<8;i++) box(1.3, 0.06, 0.06, M.screen, -4.9, 0.4 + i*0.36, -2.86);
+    box(1.0, 0.05, 0.9, M.metal, -4.9, 3.5, -3.6);
+  } else if (THEME.prop === "board") {
+    box(3.6, 2.2, 0.1, M.paper, 1.2, 3.2, -5.28);
+    box(3.8, 0.12, 0.16, M.base, 1.2, 4.34, -5.26);
+    box(3.8, 0.12, 0.16, M.base, 1.2, 2.06, -5.26);
+    for (let i=0;i<3;i++) box(0.7,0.5,0.06,[M.accent,M.wood,M.leaf2][i], -0.1+i*1.25, 3.5, -5.2);
+  } else if (THEME.prop === "poster") {
+    box(2.0, 1.5, 0.08, M.accent, 2.6, 3.4, -5.28);
+    box(1.5, 1.1, 0.06, M.paper, 2.6, 3.4, -5.22);
+    box(1.6, 2.4, 0.9, M.dark, 4.6, 1.2, -4.4);
+    box(1.7, 0.1, 1.0, M.accent, 4.6, 2.45, -4.4);
+  } else {
+    box(1.4, 2.2, 1.2, M.deskTop, -4.7, 1.1, -4.2);
+    for (let i=1;i<3;i++) box(1.25, 0.05, 1.05, M.deskEdge, -4.7, i*0.73, -4.2);
+    box(1.0, 0.9, 1.0, M.metal, 4.4, 0.45, -3.9);
+  }
+}
+
+// 房间内容：主管桌 + 3 个员工桌
+desk(0, -2.4, 0);
+chair(0, -3.9, 0);
+desk(-3.5, 1.4, Math.PI);
+chair(-3.5, 0.1, Math.PI);
+desk(3.5, 1.4, Math.PI);
+chair(3.5, 0.1, Math.PI);
+desk(0, 1.4, Math.PI);
+chair(0, 0.1, Math.PI);
+
+specialProp();
+plant(5.2, -4.2, 1.0);
+plant(-5.6, 2.6, 0.85);
+plant(5.4, 2.2, 0.8);
+
+renderer.render(scene, cam);
+
+// 锚点：主管座 + 3 个员工座 + 特殊道具
+const ANCHOR_POINTS = {
+  boss: [0, 1.7, -2.4],
+  seats: [[-3.5, 1.5, 1.4], [0, 1.5, 1.4], [3.5, 1.5, 1.4]],
+};
+const v = new THREE.Vector3();
+function project(p) {
+  v.set(p[0], p[1], p[2]).project(cam);
+  return { x: Math.round((v.x * 0.5 + 0.5) * W), y: Math.round((-v.y * 0.5 + 0.5) * H) };
+}
+const anchors = { boss: project(ANCHOR_POINTS.boss), seats: ANCHOR_POINTS.seats.map(project), W, H };
+
+const pre = document.createElement("pre");
+pre.id = "anchors";
+pre.textContent = JSON.stringify(anchors);
+document.body.appendChild(pre);
+</script>
+</body>
+</html>
+
+

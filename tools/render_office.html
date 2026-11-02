@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Office Render</title>
+<style>html,body{margin:0;background:#f0ece4;overflow:hidden}canvas{display:block}#anchors{display:none}</style>
+<script type="importmap">
+{ "imports": { "three": "./three.module.js" } }
+</script>
+</head>
+<body>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "./GLTFLoader.js";
+
+const MODEL_DIR = "./models/";
+const MODEL_FILES = { desk: "desk.glb", chair: "chair.glb", computer: "computer.glb" };
+
+const Q = new URLSearchParams(location.search);
+const ROOM = Q.get("room");
+const BRANCH_ONLY = Q.get("branch") === "1";
+const PORTRAIT = Q.get("portrait") === "1";
+const SCALE = Math.max(1, Math.min(3, parseFloat(Q.get("scale") || "1")));
+const W = Math.round((ROOM !== null ? 1200 : (PORTRAIT ? 1080 : 1920)) * SCALE);
+const H = Math.round((ROOM !== null ? 820 : (PORTRAIT ? 1920 : 1080)) * SCALE);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H);
+if (BRANCH_ONLY) { renderer.setClearColor(0x000000, 0); renderer.alpha = true; }
+renderer.setPixelRatio(2);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+if (!BRANCH_ONLY) scene.background = new THREE.Color(0xe9e3d5);
+
+function gradientMap(steps) {
+  const t = new THREE.DataTexture(new Uint8Array(steps), steps.length, 1, THREE.RedFormat);
+  t.minFilter = THREE.NearestFilter; t.magFilter = THREE.NearestFilter;
+  t.generateMipmaps = false; t.needsUpdate = true;
+  return t;
+}
+const GRAD = gradientMap([150, 200, 235, 255]);
+const toon = (color) => new THREE.MeshToonMaterial({ color, gradientMap: GRAD });
+
+const C = {
+  floor: 0xe9e3d5,
+  roadLight: 0xf2ede3,
+  roadDark: 0xe6dfd1,
+  curb: 0xd8d2c6,
+  wall: 0xf7f4ee,
+  glass: 0xd8e8ee,
+  frame: 0xa9b4c0,
+};
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0xd8d2c6, 1.15));
+const sun = new THREE.DirectionalLight(0xfff4e0, 2.0);
+sun.position.set(9, 16, 7);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far = 90;
+sun.shadow.camera.left = -14;
+sun.shadow.camera.right = 14;
+sun.shadow.camera.top = 14;
+sun.shadow.camera.bottom = -14;
+sun.shadow.radius = 5;
+sun.shadow.bias = -0.0006;
+sun.shadow.normalBias = 0.02;
+scene.add(sun);
+
+const floor = new THREE.Mesh(new THREE.BoxGeometry(PORTRAIT ? 22 : 56, 0.4, PORTRAIT ? 38 : 38), toon(C.floor));
+floor.position.set(0, -0.2, 0);
+floor.receiveShadow = true;
+scene.add(floor);
+
+const loader = new GLTFLoader();
+const cache = new Map();
+
+async function loadModel(key) {
+  if (cache.has(key)) return cache.get(key);
+  const g = await loader.loadAsync(MODEL_DIR + MODEL_FILES[key]);
+  const root = g.scene;
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    o.castShadow = true; o.receiveShadow = true;
+    const src = Array.isArray(o.material) ? o.material : [o.material];
+    const mats = src.map(m => toon(m && m.color ? m.color.getHex() : 0xffffff));
+    o.material = Array.isArray(o.material) ? mats : mats[0];
+  });
+  cache.set(key, root);
+  return root;
+}
+
+function place(key, { x = 0, z = 0, y = 0, size = 1, by = "xz", rotY = 0, tint = null }) {
+  const base = cache.get(key);
+  if (!base) return null;
+  const o = base.clone(true);
+  if (tint != null) {
+    o.traverse(m => {
+      if (!m.isMesh) return;
+      const mats = (Array.isArray(m.material) ? m.material : [m.material]).map(() => toon(tint));
+      m.material = Array.isArray(m.material) ? mats : mats[0];
+    });
+  }
+  let box = new THREE.Box3().setFromObject(o);
+  const sz = box.getSize(new THREE.Vector3());
+  const ref = by === "y" ? (sz.y || 1) : (Math.max(sz.x, sz.z) || 1);
+  o.scale.setScalar(size / ref);
+  o.rotation.y = rotY;
+  o.updateMatrixWorld(true);
+  box.setFromObject(o);
+  const c = box.getCenter(new THREE.Vector3());
+  o.position.set(x - c.x, y - box.min.y, z - c.z);
+  scene.add(o);
+  box.setFromObject(o);
+  return { height: box.max.y - box.min.y };
+}
+
+for (const key of Object.keys(MODEL_FILES)) {
+  try { await loadModel(key); } catch (e) { console.warn("模型缺失", MODEL_FILES[key]); }
+}
+
+// ---------- 走廊 ----------
+const ROAD_LEN = PORTRAIT ? 36 : 40, ROAD_HALF = 2.2;
+
+if (!BRANCH_ONLY) for (let i = 0; i < ROAD_LEN; i++) {
+  const plate = new THREE.Mesh(
+    new THREE.BoxGeometry(2.0, 0.04, ROAD_HALF * 2 - 0.2),
+    toon(i % 2 ? C.roadLight : C.roadDark)
+  );
+  plate.position.set(PORTRAIT ? 0 : (-ROAD_LEN / 2 + i * 2 + 1), 0.02, PORTRAIT ? (-ROAD_LEN / 2 + i * 2 + 1) : 0);
+  plate.receiveShadow = true;
+  scene.add(plate);
+}
+if (!BRANCH_ONLY) [-1, 1].forEach(sg => {
+  const curb = new THREE.Mesh(new THREE.BoxGeometry(ROAD_LEN, 0.12, 0.16), toon(C.curb));
+  curb.position.set(0, 0.05, sg * ROAD_HALF);
+  scene.add(curb);
+});
+
+// 走廊中段几处地灯，增加色彩点缀
+if (!BRANCH_ONLY) for (let i = -2; i <= 2; i++) {
+  const lampPole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.6, 8), toon(0xa9b4c0));
+  lampPole.position.set(i * 6.5, 1.3, ROAD_HALF + 0.55);
+  lampPole.castShadow = true;
+  scene.add(lampPole);
+  const lampHead = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 8), toon(0xfff2c8));
+  lampHead.position.set(i * 6.5, 2.7, ROAD_HALF + 0.55);
+  scene.add(lampHead);
+}
+
+// ---------- 玻璃办公室 ----------
+const RW = 7.2, RD = 6.0, RH = 3.4;
+
+function wallSolid(cx, cz, w, d, h) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), toon(C.wall));
+  m.position.set(cx, h / 2, cz);
+  m.castShadow = true; m.receiveShadow = true;
+  scene.add(m);
+}
+function wallGlass(cx, cz, w, d, h, y0) {
+  const g = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    new THREE.MeshStandardMaterial({
+      color: C.glass, transparent: true, opacity: 0.22,
+      roughness: 0.1, metalness: 0.05, depthWrite: false,
+    })
+  );
+  g.position.set(cx, y0 + h / 2, cz);
+  scene.add(g);
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(w + 0.06, 0.08, d + 0.06), toon(C.frame));
+  cap.position.set(cx, y0 + h, cz);
+  cap.castShadow = true;
+  scene.add(cap);
+}
+
+function buildRoom(cx, cz, side, color, backDoor) {
+  const lowH = RH * 0.46, glassH = RH - lowH;
+  wallSolid(cx, cz - side * RD / 2, RW, 0.16, lowH);
+  wallGlass(cx, cz - side * RD / 2, RW, 0.08, glassH, lowH);
+  wallSolid(cx - RW / 2, cz, 0.16, RD, lowH);
+  wallGlass(cx - RW / 2, cz, 0.08, RD, glassH, lowH);
+  wallSolid(cx + RW / 2, cz, 0.16, RD, lowH);
+  wallGlass(cx + RW / 2, cz, 0.08, RD, glassH, lowH);
+  if (backDoor) {
+    // 朝外那面中间留 2.2 米门洞（不放玻璃、不放矮墙）
+    const gap = 2.2, segW = (RW - gap) / 2;
+    wallGlass(cx - (gap / 2 + segW / 2), cz + side * RD / 2, segW, 0.08, glassH, lowH);
+    wallGlass(cx + (gap / 2 + segW / 2), cz + side * RD / 2, segW, 0.08, glassH, lowH);
+    wallSolid(cx - (gap / 2 + segW / 2), cz + side * RD / 2, segW, 0.16, lowH);
+    wallSolid(cx + (gap / 2 + segW / 2), cz + side * RD / 2, segW, 0.16, lowH);
+  } else {
+    wallGlass(cx, cz + side * RD / 2, RW, 0.08, glassH, lowH);
+    wallSolid(cx - RW / 2 + 0.9, cz + side * RD / 2, 1.8, 0.16, lowH);
+    wallSolid(cx + RW / 2 - 0.9, cz + side * RD / 2, 1.8, 0.16, lowH);
+  }
+
+  [-1.6, 1.6].forEach(dx => {
+    const d = place("desk", { x: cx + dx, z: cz - side * 0.7, size: 2.9, tint: 0xf4ecdd, rotY: side < 0 ? 0 : Math.PI });
+    place("computer", { x: cx + dx, z: cz - side * 1.0, y: d ? d.height : 1.3, size: 0.9, by: "y", rotY: side < 0 ? 0 : Math.PI });
+    place("chair", { x: cx + dx, z: cz + side * 0.85, size: 1.15, by: "y", rotY: side < 0 ? Math.PI : 0, tint: color });
+  });
+
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.32, 0.62, 12), toon(0xe9dccb));
+  pot.position.set(cx + RW / 2 - 0.9, 0.31, cz - side * (RD / 2 - 0.9));
+  pot.castShadow = true;
+  scene.add(pot);
+  const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), toon(0x9ccfa4));
+  leaf.position.set(cx + RW / 2 - 0.9, 1.02, cz - side * (RD / 2 - 0.9));
+  leaf.scale.y = 0.85;
+  leaf.castShadow = true;
+  scene.add(leaf);
+}
+
+const STATIONS = PORTRAIT ? [
+  { name: "claude",   x: -4.5, z: -14, side: 1,  color: 0xf0a882 },
+  { name: "deepseek", x: 4.5,  z: -7,  side: 1,  color: 0x9cc0e6 },
+  { name: "gemini",   x: -4.5, z: 0,   side: 1,  color: 0xc3abe4 },
+  { name: "grok",     x: 4.5,  z: 7,   side: 1,  color: 0xf0a678 },
+  { name: "chatgpt",  x: -4.5, z: 14,  side: 1,  color: 0x9ad6b0 },
+] : [
+  { name: "claude",   x: -15,  z: -5.4, side: -1, color: 0xf0a882 },
+  { name: "deepseek", x: -7.5, z: 5.4,  side: 1,  color: 0x9cc0e6, backDoor: true },
+  { name: "gemini",   x: 0,    z: -5.4, side: -1, color: 0xc3abe4 },
+  { name: "grok",     x: 7.5,  z: 5.4,  side: 1,  color: 0xf0a678 },
+  { name: "chatgpt",  x: 15,   z: -5.4, side: -1, color: 0x9ad6b0 },
+];
+if (!BRANCH_ONLY) STATIONS.forEach(s => buildRoom(s.x, s.z, s.side, s.color, s.backDoor));
+
+if (!BRANCH_ONLY) (function reception() {
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.1, 3.4), toon(0xf4ecdd));
+  bar.position.set(-21, 0.55, 0);
+  bar.castShadow = true; bar.receiveShadow = true;
+  scene.add(bar);
+})();
+
+if (!BRANCH_ONLY) (function lounge() {
+  const sofa = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.75, 1.1), toon(0xdfe4ea));
+  sofa.position.set(4.5, 0.375, 0);
+  sofa.castShadow = true; sofa.receiveShadow = true;
+  scene.add(sofa);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.6, 0.22), toon(0xd6dbe2));
+  back.position.set(4.5, 0.7, 0.45);
+  scene.add(back);
+})();
+
+// ---------- DeepSeek 门口向外的支路 ----------
+(function deepseekExit() {
+  const cx = -7.5;
+  const z0 = 5.4 + 3.0;          // DeepSeek 背墙
+  const LEN = 5.0, HALF = 1.3;
+
+  // 地砖（与走廊同款，沿 z 方向铺）
+  const steps = Math.ceil(LEN / 2);
+  for (let i = 0; i < steps; i++) {
+    const seg = Math.min(2, LEN - i * 2);
+    const plate = new THREE.Mesh(
+      new THREE.BoxGeometry(HALF * 2 - 0.2, 0.04, seg - 0.06),
+      toon(i % 2 ? C.roadLight : C.roadDark)
+    );
+    plate.position.set(cx, 0.02, z0 + i * 2 + seg / 2);
+    plate.receiveShadow = true;
+    scene.add(plate);
+  }
+
+  // 两侧路缘
+  [-1, 1].forEach(sg => {
+    const curb = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, LEN), toon(C.curb));
+    curb.position.set(cx + sg * HALF, 0.05, z0 + LEN / 2);
+    scene.add(curb);
+  });
+})();
+
+// ---------- 相机 ----------
+let cam;
+if (ROOM !== null) {
+  const i = Math.max(0, Math.min(STATIONS.length - 1, parseInt(ROOM, 10) || 0));
+  const s = STATIONS[i];
+  cam = new THREE.PerspectiveCamera(42, W / H, 0.5, 300);
+  cam.position.set(30, 30, 30);
+  cam.lookAt(0, 1.0, 13);
+} else {
+  cam = new THREE.OrthographicCamera(-24.5, 24.5, 13.78, -13.78, 0.1, 400);
+  cam.position.set(24, 24, 24);
+  cam.lookAt(0, 1.0, 0);
+}
+cam.updateMatrixWorld();
+
+renderer.render(scene, cam);
+
+const anchors = STATIONS.map((s, i) => {
+  const v = new THREE.Vector3(s.x, 2.15, s.z - s.side * 0.4).project(cam);
+  return { i, sx: Math.round((v.x * .5 + .5) * W), sy: Math.round((-v.y * .5 + .5) * H) };
+});
+const pre = document.createElement("pre");
+pre.id = "anchors";
+pre.textContent = JSON.stringify({ W, H, anchors });
+document.body.appendChild(pre);
+document.title = "DONE";
+</script>
+</body>
+</html>

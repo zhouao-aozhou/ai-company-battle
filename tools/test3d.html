@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>3D 场景测试</title>
+<style>
+  html,body{margin:0;height:100%;background:#e9e3d5;overflow:hidden}
+  #host{position:absolute;inset:0}
+  #anchors{position:absolute;inset:0;pointer-events:none}
+  .dot{position:absolute;width:8px;height:8px;border-radius:50%;background:#e23b3b;transform:translate(-50%,-50%)}
+  #hud{position:absolute;left:12px;top:12px;font:12px/1.6 ui-monospace,monospace;color:#333;background:#ffffffcc;padding:8px 10px;border-radius:8px}
+</style>
+<script type="importmap">
+{ "imports": { "three": "./three.module.js" } }
+</script>
+</head>
+<body>
+<div id="host"></div>
+<div id="anchors"></div>
+<div id="hud">3D 场景加载中…</div>
+<script type="module">
+import office3d from "./office3d.js";
+
+const host = document.getElementById("host");
+const hud = document.getElementById("hud");
+const layer = document.getElementById("anchors");
+
+await office3d.init(host);
+hud.textContent = "3D 场景就绪 · 5 个部门";
+
+const ids = ["claude", "deepseek", "gemini", "grok", "chatgpt"];
+function paint() {
+  layer.innerHTML = "";
+  ids.forEach((id) => {
+    const p = office3d.anchorOf(id);
+    const d = document.createElement("div");
+    d.className = "dot";
+    d.style.left = p.x + "px";
+    d.style.top = p.y + "px";
+    layer.appendChild(d);
+  });
+  requestAnimationFrame(paint);
+}
+paint();
+</script>
+</body>
+</html>
