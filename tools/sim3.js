@@ -67,9 +67,9 @@ function playAggressive(G) {
 }
 function rank(diffId, cash) {
   const cfgs = {
-    easy:   { S: 4600000, A: 2600000, B: 1300000, C: 500000 },
-    normal: { S: 4100000, A: 2400000, B: 1000000, C: 420000 },
-    hard:   { S: 2000000, A: 1100000, B: 450000,  C: 150000 },
+    easy:   { S: 2600000, A: 1700000, B: 1050000, C: 420000 },
+    normal: { S: 2400000, A: 1550000, B: 950000,  C: 380000 },
+    hard:   { S: 1150000, A: 750000,  B: 380000,  C: 110000 },
   };
   const r = cfgs[diffId];
   return cash >= r.S ? "S" : cash >= r.A ? "A" : cash >= r.B ? "B" : cash >= r.C ? "C" : "D";
@@ -92,6 +92,6 @@ for (const diff of ["easy", "normal", "hard"]) {
   }
   runs.sort((a, b) => a - b);
   const mid = runs[Math.floor(runs.length / 2)];
-  const cfgs = { easy: "460/260/130/50万", normal: "410/240/100/42万", hard: "200/110/45/15万" };
+  const cfgs = { easy: "260/170/105/42万", normal: "240/155/95/38万", hard: "115/75/38/11万" };
   console.log(diff.padEnd(7), String(mid).padStart(11), rank(diff, mid).padStart(6), "  ", cfgs[diff]);
 }

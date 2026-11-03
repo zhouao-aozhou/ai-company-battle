@@ -590,11 +590,11 @@
 
 
 
-  .col.left { border-right: 1px solid var(--line); background: rgba(16,22,38,.72); }
+  .col.left { border-right: 1px solid var(--line); background: rgba(16,22,38,.72);  position: relative; z-index: 20; }
 
 
 
-  .col.right { border-left: 1px solid var(--line); background: rgba(16,22,38,.72); }
+  .col.right { border-left: 1px solid var(--line); background: rgba(16,22,38,.72); position: relative; z-index: 20; }
 
 
 
@@ -3026,7 +3026,7 @@
 
 
 
-  .sceneStage { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .sceneStage { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1; }
 
 
 
@@ -4237,7 +4237,7 @@
   .sceneWorker {
     position: absolute; transform: translate(-50%, -100%);
     display: flex; flex-direction: column; align-items: center; gap: 2px;
-    cursor: pointer; z-index: 4; pointer-events: auto;
+    cursor: pointer; z-index: 4; pointer-events: auto; max-width: 120px;
   }
   .sceneWorker .swTag {
     font-size: 10px; line-height: 1.3; padding: 1px 6px; border-radius: 8px;
@@ -4292,6 +4292,43 @@
   .pkrow .pkname { flex: 1; font-weight: 600; color: #fff; }
   .pkrow .pksk, .pkrow .pkstam { color: #9fb3d4; }
   .pkrow .pkstate { width: 56px; text-align: right; }
+  @keyframes pipBob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+  }
+  /* 鼠标移到资产上，整体放大一点，并让下面的小鲸鱼娘也放大 */
+  .chip.cash {
+    transition: transform .16s ease, background .16s ease;
+    transform-origin: center center;
+    cursor: default;
+  }
+  .chip.cash:hover {
+    transform: scale(1.14);
+    background: rgba(255,255,255,.12);
+    box-shadow: 0 4px 14px rgba(0,0,0,.22);
+    z-index: 5;
+  }
+  .chip.cash #rankPip img {
+    transition: transform .16s ease, opacity .16s ease, filter .16s ease;
+  }
+  .chip.cash:hover #rankPip img {
+    transform: scale(1.35);
+  }
+  .egwrap { max-height: 62vh; overflow-y: auto; }
+  .egblock { margin-bottom: 14px; }
+  .eghead { font-size: 13px; font-weight: 700; margin: 0 0 6px 2px; letter-spacing: 1px; }
+  .egrow {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; margin-bottom: 4px; border-radius: 9px;
+    background: rgba(255,255,255,.035); border: 1px solid rgba(120,150,200,.12);
+    font-size: 12.5px;
+  }
+  .egrow.on { background: rgba(90,130,196,.16); border-color: rgba(120,160,220,.3); }
+  .egrank { width: 18px; font-weight: 800; font-size: 15px; text-align: center; }
+  .egname { flex: 1; color: #cfe0ff; }
+  .egrow.on .egname { color: #fff; font-weight: 600; }
+  .egcond { color: #8ea3c9; font-size: 11.5px; }
+  .egmark { width: 18px; text-align: center; font-size: 11px; }
 </style>
 
 
@@ -4366,6 +4403,7 @@
 
 
 
+      <div class="chip" onclick="showEndingGallery()" title="结局图鉴" style="cursor:pointer">📖 <b>图鉴</b></div>
       <div class="chip cash" data-tip="cash">💰 <b id="rCash">0</b></div>
 
 
@@ -4666,7 +4704,7 @@
 
 
 
-      <div class="rp-sec">主管道具（每买一张，价格都会上涨）</div>
+      <div class="rp-sec">主管道具</div>
 
 
 
@@ -4674,7 +4712,10 @@
 
 
 
-      <div class="rp-sec">员工道具（分档次，只能给对应档次的员工用）</div>
+      <div class="rp-sec">算力道具</div>
+      <div class="shop-grid" id="shopCompute"></div>
+
+      <div class="rp-sec">员工道具</div>
 
 
 
@@ -4682,7 +4723,7 @@
 
 
 
-      <div class="rp-sec" id="shopBrkSec" style="display:none">自主研发（某个主管旗下有 3 名以上顶尖员工时解锁）</div>
+      <div class="rp-sec" id="shopBrkSec" style="display:none">自主研发</div>
 
 
 
@@ -5258,11 +5299,36 @@ const CFG = {
 
 
 
+  // 每档难度的结局文案（同一评级在不同难度叫法不同）
+  rankEndings: {
+    easy: {
+      S: ["✨ 神仙老板 ✨", "钱多到你都不想数了，员工还在问下次团建去哪玩 ₍ᐢ.ˬ.ᐢ₎"],
+      A: ["(๑˃̵ᴗ˂̵)و 人生赢家", "赚得盆满钵满，员工也开开心心，朋友都在偷偷问你是怎么搞的～"],
+      B: ["还不错嘛～", "没暴富也没翻车，日子过得挺滋润，摸摸鱼就到了第 100 天。"],
+      C: ["勉勉强强啦", "钱没少花业绩一般，但好歹还活着 (｡•́︿•̀｡)"],
+      D: ["玩脱了呢…", "本来只想随便玩玩，结果账上只剩灰尘，连猫粮都买不起了。"],
+    },
+    normal: {
+      S: ["商业天才！", "行业里没人做到过，你把五个 AI 变成了一台会下金蛋的印钞机 ✧₊⁺"],
+      A: ["超厉害的说", "做到了行业第一，虽然大家都累得只会发出喵喵叫了。"],
+      B: ["小小成就", "账上过了百万，够在同行面前挺直腰板啦！"],
+      C: ["马马虎虎", "活下来了，也攒了一点点家底，就是钱包还是有点瘪。"],
+      D: ["qwq 破产了", "刚够发工资，再撑一百天也不会更好，摸着空钱包叹气。"],
+    },
+    hard: {
+      S: ["奇迹 survivor！", "同行一个个倒下，只有你还站着，账上还压着一座小金山 ✧◝(⁰▿⁰)◜✧"],
+      A: ["险胜 ✦", "每一步都踩在破产线上，最后居然赢了，心跳都要停了！"],
+      B: ["活下来啦", "活得狼狈但活着，在这行能活着就算本事 (๑•̀ㅂ•́)و✧"],
+      C: ["苟住了…", "所有人都累垮了，账上刚好够发下个月工资，风一吹就散。"],
+      D: ["无了 (哭)", "资金链断在最后一刻，连办公室的椅子都被人搬走了呜呜呜…"],
+    },
+  },
+
   // 每档难度自己的评级门槛（同样的钱，难度不同评价不同）
   rankTiers: {
-    easy:   { S: 4600000, A: 2600000, B: 1300000, C: 500000 },
-    normal: { S: 4100000, A: 2400000, B: 1000000, C: 420000 },
-    hard:   { S: 2000000, A: 1100000, B: 450000,  C: 150000 },
+    easy:   { S: 2600000, A: 1700000, B: 1050000, C: 420000 },
+    normal: { S: 2400000, A: 1550000, B: 950000,  C: 380000 },
+    hard:   { S: 1150000, A: 750000,  B: 380000,  C: 110000 },
   },
 
   recruitTiers: [
@@ -5647,6 +5713,7 @@ function newGame(diffId) {
 
 
     usedToday: 0,
+    quotaPenalty: 0,   // 昨天遗留占用，今天的免费额度要减掉
 
 
 
@@ -5850,6 +5917,31 @@ function starCap(day) {
 
 
 
+/* 今天实际可用的免费算力（扣掉昨天遗留占用） */
+/* 不同档次的人消耗不同算力 */
+function computeCostOf(w) {
+  if (!w) return CFG.workerCompute;
+  if (w.tier === "elite") return 4;
+  if (w.tier === "senior") return 3;
+  return CFG.workerCompute;   // 普通 2
+}
+
+/* 一组人总共要多少算力 */
+function crewCompute(list) {
+  return (list || []).reduce((a, w) => a + computeCostOf(w), 0);
+}
+
+/* 道具是否已解锁（按天数） */
+function isItemUnlocked(it) {
+  if (!it) return false;
+  if (!it.unlockDay) return true;
+  return (G.day || 1) >= it.unlockDay;
+}
+
+function effFreeCompute() {
+  return Math.max(0, CFG.freeCompute + (G.quotaBoost || 0) - (G.quotaPenalty || 0));
+}
+
 function ordersPerDay(day) {
   // 后期订单越来越多，不扩张就做不完（逾期会罚款）
   if (day <= 2) return 1;
@@ -5946,7 +6038,7 @@ function spawnOrder() {
 
 
 
-    reward: Math.round((stars * 800 + rnd(0, 250)) * CFG.diff.rewardMul * (1 + ((G.day || 1) - 1) * 0.09)),
+    reward: Math.round((stars * 800 + rnd(0, 250)) * CFG.diff.rewardMul * (1 + ((G.day || 1) - 1) * 0.06)),
 
 
 
@@ -6038,7 +6130,7 @@ function spawnOrder() {
 
 
 
-      o.reward = Math.round((o.stars * 800 + rnd(0, 250)) * CFG.diff.rewardMul * (1 + ((G.day || 1) - 1) * 0.09));
+      o.reward = Math.round((o.stars * 800 + rnd(0, 250)) * CFG.diff.rewardMul * (1 + ((G.day || 1) - 1) * 0.06));
 
 
 
@@ -6468,9 +6560,8 @@ function undoOrder(orderId) {
 
     if (w) {
       w.busy = null;
-      G.compute += CFG.workerCompute;
-      // 撤回时把占用的每日免费额度也退回来，否则白占额度
-      G.usedToday = Math.max(0, (G.usedToday || 0) - CFG.workerCompute);
+      G.compute += computeCostOf(w);
+      G.usedToday = Math.max(0, (G.usedToday || 0) - computeCostOf(w));
     }
 
 
@@ -6556,6 +6647,44 @@ function renderTop() {
 
 
   $("rCash").textContent = Math.round(G.cash);
+  // 现金旁边：一排小鲸鱼娘，随金额一格格亮起来（不写文字）
+  try {
+    const _rt = (CFG.rankTiers && CFG.rankTiers[CFG.diff.id]) || { S: 1e7, A: 1e7, B: 1e7, C: 1e7 };
+    const _c = G.cash;
+    const _marks = [0, _rt.C, _rt.B, _rt.A, _rt.S];
+    let _stage = 0;
+    for (let i = 1; i < _marks.length; i++) if (_c >= _marks[i]) _stage = i;
+
+    let el = document.getElementById("rankPip");
+    if (!el) {
+      el = document.createElement("span");
+      el.id = "rankPip";
+      el.style.cssText = "display:inline-flex;align-items:center;gap:1px;margin-left:7px;vertical-align:middle;user-select:none";
+      const host = $("rCash");
+      if (host && host.parentElement) host.parentElement.appendChild(el);
+    }
+    if (el) {
+      // 五个阶段各一张不同表情：累→思考→期待→开心→超兴奋
+      const _faces = [
+        "assets/rankpet5.webp",
+        "assets/rankpet1.webp",
+        "assets/rankpet3.webp",
+        "assets/rankpet2.webp",
+        "assets/rankpet4.webp",
+      ];
+      let html = "";
+      for (let i = 0; i < 5; i++) {
+        const lit = i <= _stage;
+        const cur = i === _stage;
+        html += `<img src="${_faces[i]}" alt="" onclick="showPetBig('${_faces[i]}')"
+          style="width:18px;height:18px;object-fit:contain;border-radius:50%;cursor:zoom-in;
+                 opacity:${lit ? 1 : 0.18};
+                 filter:${lit ? "none" : "grayscale(1) brightness(.55)"};
+                 ${cur ? "animation:pipBob 1.8s ease-in-out infinite;" : ""}" />`;
+      }
+      el.innerHTML = html;
+    }
+  } catch (e) {}
 
 
 
@@ -7289,6 +7418,7 @@ function renderPanel() {
 
 
 
+          <button onclick="raiseWorker('${wSel.id}')" ${(wSel.raiseCd || 0) > 0 ? "disabled" : ""} onmouseenter="showActionTip('raise')" onmouseleave="hideActionTip()">${(wSel.raiseCd || 0) > 0 ? `加薪冷却 ${wSel.raiseCd} 天` : `💵 加薪 ¥${wSel.tier === "elite" ? 800 : (wSel.tier === "senior" ? 400 : 200)}`}</button>
           <button onclick="sellWorker('${wSel.id}')" ${wSel.busy ? "disabled" : ""} onmouseenter="showActionTip('sell')" onmouseleave="hideActionTip()">💸 卖掉 ¥${price}</button>
 
 
@@ -7469,7 +7599,7 @@ function renderPanel() {
 
 
 
-        今日算力 <b style="color:${(G.usedToday || 0) > CFG.freeCompute ? "#ff9b9b" : "#7de3ff"}">${G.usedToday || 0} / ${CFG.freeCompute}</b>
+        今日算力 <b style="color:${(G.usedToday || 0) > effFreeCompute() ? "#ff9b9b" : "#7de3ff"}">${G.usedToday || 0} / ${effFreeCompute()}</b>${(G.quotaPenalty || 0) > 0 ? ` <span style="font-size:10px;color:#ff9b9b">(-${G.quotaPenalty})</span>` : ""}
 
 
 
@@ -7534,10 +7664,11 @@ function renderPanel() {
 
 
         </p>
-
-
-
-      </div>`;
+        <ol class="tips">
+          <li>算力每天有免费额度，昨天没干完的活会占用今天的额度。</li>
+          <li>打完一局会记进「📖 图鉴」，三种难度共 15 个结局等你收集。</li>
+        </ol>
+</div>`;
 
 
 
@@ -8421,7 +8552,7 @@ function renderOfficeScene(floor) {
     const more = team.length - shown.length;
     let html = shown.map((w, k) => {
       const col = w.mustRest ? "#ef7a7a" : (w.busy ? "#f0a63c" : "#6fc48b");
-      return `<div class="sceneWorker" data-ai="${s.id}" data-k="${k}" data-worker="${w.id}" data-total="${team.length}" onclick="selStaff='${s.id}';selWorker='${w.id}';renderAll()">
+      return `<div class="sceneWorker" data-ai="${s.id}" data-k="${k}" data-worker="${w.id}" data-total="${team.length}" onclick="clickWorker('${s.id}', '${w.id}')">
         <div class="swTag">${w.name}</div>
         <div class="swHead" style="border-color:${col}">${s.name.charAt(0)}</div>
       </div>`;
@@ -9639,7 +9770,7 @@ function showAssignPreview(orderId, staffId) {
     .sort((a, b) => (b.skills[o.type] * 100 + b.stamina) - (a.skills[o.type] * 100 + a.stamina))
     .slice(0, Math.min(need, free.length));
 
-  const cost = picked.length * CFG.workerCompute;
+  const cost = crewCompute(picked);
   pendingAssign = { orderId, staffId, picked: picked.map((w) => w.id), cost };
   renderAssignBar(o, ai, picked, cost);
   // 让被选中的人在场景里高亮
@@ -9685,8 +9816,216 @@ function cancelAssign() {
   document.querySelectorAll(".sceneWorker.picked").forEach((el) => el.classList.remove("picked"));
 }
 
+/* 点主管：直接弹一个详情窗，心情/疲劳/信任/技能都能看见 */
+/* 点小图标看大图 */
+/* 组员加薪：¥200，日薪 +10，体力回一点，5 天冷却 */
+function raiseWorker(wid) {
+  const w = G.workers.find((x) => x.id === wid);
+  if (!w) return;
+  if ((w.raiseCd || 0) > 0) { toast(`${w.name} 刚加过薪，还要等 ${w.raiseCd} 天`, "warn"); return; }
+  if (G.cash < 200) { toast(`资金不足：加薪要 ¥200，当前 ¥${Math.round(G.cash)}`, "bad"); return; }
+  const before = w.wage;
+  // 涨幅按档次走：普通 +5 / 资深 +12 / 顶尖 +30（约 20%）
+  const bump = w.tier === "elite" ? 30 : (w.tier === "senior" ? 12 : 5);
+  w.wage = w.wage + bump;
+  w.raiseCd = 5;
+  w.stamina = Math.min(100, w.stamina + 15);
+  const cost = w.tier === "elite" ? 800 : (w.tier === "senior" ? 400 : 200);
+  G.cash -= cost;
+  toast(`${w.name} 日薪 ¥${before} → ¥${w.wage}（+${bump}），体力 +15`, "");
+  log(`💵 ${w.name} 加薪 ¥${before}→¥${w.wage}/天`);
+  save(); renderAll();
+}
+
+/* 商店上新提示条 */
+function showShopNotice(text) {
+  let el = document.getElementById("shopNotice");
+  if (el) el.remove();
+  el = document.createElement("div");
+  el.id = "shopNotice";
+  el.innerHTML = `<span>🛒 商店上新：${text}</span><button>去看看 →</button>`;
+  el.style.cssText = "position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:70;display:flex;align-items:center;gap:14px;padding:11px 18px;border-radius:12px;background:linear-gradient(180deg,rgba(40,70,120,.95),rgba(24,44,80,.95));color:#dbe9ff;font-size:13px;border:1px solid rgba(120,170,240,.45);box-shadow:0 10px 30px rgba(0,0,0,.35)";
+  el.querySelector("button").style.cssText = "padding:5px 12px;border-radius:8px;border:1px solid rgba(140,180,240,.5);background:rgba(70,110,180,.6);color:#fff;cursor:pointer;font-size:12px";
+  el.querySelector("button").onclick = () => { el.remove(); try { goHR(); } catch (e) {} };
+  document.body.appendChild(el);
+  setTimeout(() => { if (el.parentElement) el.style.opacity = "0.9"; }, 12000);
+}
+
+function showPetBig(src) {
+  showModal("", `<div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+      <img src="${src}" style="width:260px;height:260px;object-fit:contain;border-radius:18px;background:rgba(255,255,255,.05)" />
+      <div style="font-size:12px;color:#9fb3d4">小鲸鱼娘正在看着你的账本</div>
+    </div>`, [{ label: "关闭", fn: null }]);
+}
+
+/* ---------- 结局图鉴 ---------- */
+const ENDING_KEY = "aicompany_endings_v1";
+
+function loadEndings() {
+  try { return JSON.parse(localStorage.getItem(ENDING_KEY) || "{}"); } catch (e) { return {}; }
+}
+function saveEndings(obj) {
+  try { localStorage.setItem(ENDING_KEY, JSON.stringify(obj)); } catch (e) {}
+}
+function recordEnding(diffId, rank) {
+  const seen = loadEndings();
+  const key = diffId + "_" + rank;
+  if (!seen[key]) {
+    seen[key] = Date.now();
+    saveEndings(seen);
+    return true;   // 首次解锁
+  }
+  seen[key] = seen[key];   // 已解锁，保留首次时间
+  saveEndings(seen);
+  return false;
+}
+
+function showEndingGallery() {
+  const seen = loadEndings();
+  const order = [
+    ["easy", "轻松", "#59d98c"],
+    ["normal", "标准", "#7de3ff"],
+    ["hard", "硬核", "#ff9b9b"],
+  ];
+  const rankMeta = [
+    ["S", "金色传说", "#ffd45e"],
+    ["A", "相当厉害", "#8fe3ff"],
+    ["B", "还不错", "#7de38f"],
+    ["C", "勉强及格", "#c8d6ea"],
+    ["D", "破产收场", "#ff7b7b"],
+  ];
+  let total = 0, got = 0;
+  const blocks = order.map(([id, name, color]) => {
+    const rt = CFG.rankTiers[id];
+    const ends = CFG.rankEndings[id];
+    const rows = rankMeta.map(([r, _, rc]) => {
+      total++;
+      const key = id + "_" + r;
+      const unlocked = !!seen[key];
+      if (unlocked) got++;
+      const pair = ends[r] || ["?", ""];
+      const need = r === "D" ? "低于保底线" : `¥${Math.round(rt[r] / 10000)} 万`;
+      return `<div class="egrow${unlocked ? " on" : ""}">
+          <span class="egrank" style="color:${unlocked ? rc : "#5b6675"}">${r}</span>
+          <span class="egname">${unlocked ? pair[0] : "？？？"}</span>
+          <span class="egcond">${need}</span>
+          <span class="egmark">${unlocked ? "✓" : "🔒"}</span>
+        </div>`;
+    }).join("");
+    return `<div class="egblock">
+        <div class="eghead" style="color:${color}">${name}难度</div>
+        ${rows}
+      </div>`;
+  }).join("");
+
+  showModal(`结局图鉴 ${got}/${total}`, `<div class="egwrap">${blocks}</div>`, [{ label: "关闭", fn: null }]);
+}
+
+/* 在主管详情卡里点「派活」= 把这个组员派给当前订单 */
+function pickWorkerForOrder(wid) {
+  const w = G.workers.find((x) => x.id === wid);
+  if (!w) return;
+  if (!selOrder) { toast("先在左边点一张订单，再点派活", "warn"); return; }
+  const o = G.orders.find((x) => x.id === selOrder);
+  if (!o) { toast("订单已经不在了", "warn"); return; }
+  if (w.busy) { toast(`${w.name} 正在做别的单，先撤回那单`, "warn"); return; }
+  if (w.mustRest) { toast(`${w.name} 需要休息`, "warn"); return; }
+  if (o.crew.indexOf(w.id) >= 0) { toast(`${w.name} 已经在这单上了`, "warn"); return; }
+  assign(o.id, w.aiId, [w.id]);
+}
+
+function showLeaderCard(id) {
+  const s = G.staff.find((x) => x.id === id);
+  if (!s) return;
+  const team = (G.workers || []).filter((w) => w.aiId === id);
+  const busy = team.filter((w) => w.busy).length;
+  const bar = (label, val, color) => `<div style="display:flex;align-items:center;gap:10px;margin:7px 0;font-size:13px">
+      <span style="width:52px;color:#9fb3d4">${label}</span>
+      <span style="flex:1;height:9px;border-radius:5px;background:rgba(255,255,255,.1);overflow:hidden">
+        <i style="display:block;height:100%;width:${Math.max(0, Math.min(100, val))}%;background:${color};border-radius:5px"></i>
+      </span>
+      <b style="width:34px;text-align:right;color:#fff">${Math.round(val)}</b>
+    </div>`;
+  const sk = Object.keys(CFG.types).map((k) => {
+    const v = s.skills[k] || 0;
+    return `<span style="display:inline-block;margin:3px 6px 3px 0;padding:3px 9px;border-radius:7px;font-size:12px;background:rgba(120,160,220,.18);color:#cfe0ff">${CFG.types[k].name} <b style="color:#fff">${v}</b></span>`;
+  }).join("");
+  const html = `
+    <div style="min-width:300px">
+      <div style="display:flex;gap:14px;align-items:center;margin-bottom:14px">
+        <img src="${s.portrait}" style="width:64px;height:64px;border-radius:12px;object-fit:cover;background:#233">
+        <div>
+          <div style="font-size:19px;font-weight:700;color:#fff">${s.name}</div>
+          <div style="font-size:12px;color:#9fb3d4">${s.role || ""} · 组员 ${team.length} 人（${busy} 在做活）</div>
+          <div style="font-size:12px;color:#9fb3d4">日薪 ¥${s.wage} · 加薪冷却 ${s.raiseCd || 0} 天</div>
+        </div>
+      </div>
+      ${bar("心情", s.mood, "#ff9bb8")}
+      ${bar("疲劳", s.fatigue, "#ffc861")}
+      ${bar("信任", s.trust, "#7de3ff")}
+      <div style="margin:12px 0 6px;font-size:12px;color:#9fb3d4">技能</div>
+      <div>${sk}</div>
+
+      <div style="margin:14px 0 6px;font-size:12px;color:#9fb3d4">
+        组员 ${team.length} 人
+        ${selOrder ? `<span style="color:#7de38f">· 点名字直接派当前订单</span>` : `<span style="color:#ffc861">· 先在左边选订单</span>`}
+      </div>
+      <div style="max-height:190px;overflow-y:auto;border:1px solid rgba(120,150,200,.16);border-radius:9px">
+        ${
+          team.length
+            ? team.map((w) => {
+                const stat = w.mustRest ? ["需休息", "#ef7a7a"] : (w.busy ? ["在做活", "#f0a63c"] : ["空闲", "#6fc48b"]);
+                const skv = Object.keys(CFG.types).map((k) => w.skills[k] || 0).join("/");
+                return `<div style="display:flex;align-items:center;gap:9px;padding:7px 11px;border-bottom:1px solid rgba(120,150,200,.1);font-size:12px;cursor:pointer"
+                    onclick="pickWorkerForOrder('${w.id}')" title="${selOrder ? "点他做当前订单" : "先在左边选一张订单"}">
+                    <span style="flex:1;color:#fff;font-weight:600">${w.name}</span>
+                    <span style="color:#8ea3c9">${w.tier === "elite" ? "顶尖" : (w.tier === "senior" ? "资深" : "普通")}</span>
+                    <span style="color:#9fb3d4">技 ${skv}</span>
+                    <span style="color:#9fb3d4">力 ${Math.round(w.stamina)}</span>
+                    <span style="color:#7de3ff">⚡${w.tier === "elite" ? 4 : (w.tier === "senior" ? 3 : 2)}</span>
+                    <span style="color:${stat[1]};width:44px;text-align:right">${stat[0]}</span>
+                    <button onclick="event.stopPropagation();pickWorkerForOrder('${w.id}')"
+                      style="padding:3px 10px;border-radius:7px;font-size:11px;cursor:pointer;
+                             background:${selOrder ? "linear-gradient(180deg,#2f6fb8,#1d4576)" : "rgba(70,80,100,.5)"};
+                             color:#fff;border:1px solid rgba(120,160,220,.45)">派活</button>
+                  </div>`;
+              }).join("")
+            : `<div style="padding:12px;font-size:12px;color:#8ea3c9;text-align:center">还没有组员，去管理中心招人</div>`
+        }
+      </div>
+    </div>`;
+  showModal(s.name + " 的状态", html, [
+    { label: selOrder ? "主管亲自上" : "先选订单", fn: () => {
+        if (!selOrder) { toast("先在左边点一张订单", "warn"); return; }
+        const keep = selOrder;
+        try { pickLead(id); } catch (e) { console.warn(e); }
+        selOrder = keep;                 // pickLead 可能会清掉选中，这里恢复
+        // 节流：短时间内只重开一次，避免连点叠出多个弹窗
+        clearTimeout(window.__leaderCardTimer);
+        window.__leaderCardTimer = setTimeout(() => showLeaderCard(id), 90);
+      } },
+    { label: "咖啡 ¥80", fn: () => { doCoffee(id); setTimeout(() => showLeaderCard(id), 60); } },
+    { label: s.resting ? "取消休息" : "休息一天", fn: () => {
+        try { s.resting ? cancelRest(id) : doRest(id); } catch (e) {}
+        setTimeout(() => showLeaderCard(id), 60);
+      } },
+    { label: "谈话 ¥200", fn: () => { doTalk(id); setTimeout(() => showLeaderCard(id), 60); } },
+    { label: "加薪 ¥600", fn: () => { doRaise(id); setTimeout(() => showLeaderCard(id), 60); } },
+    { label: "关闭", fn: null },
+  ]);
+}
+
 function openRoom(id) {
   console.log("[openRoom]", id, "3D ready=", !!(window.OFFICE3D && window.OFFICE3D.ready));
+  try { if (typeof releasePending === "function") releasePending(); } catch (e) {}
+  selStaff = id;
+  selWorker = null;
+  try { renderPanel(); } catch (e) {}
+  try { showLeaderCard(id); } catch (e) { console.warn("card", e); }
+  try { if (window.OFFICE3D && window.OFFICE3D.focusRoom) window.OFFICE3D.focusRoom(id); } catch (e) {}
+  try { showRoomBar(id); } catch (e) {}
+  syncAnchors3D();
+  return;
   // 不切换视图，只推近 3D 相机；绝对不重绘 DOM（重绘会把 canvas 干掉）
   // 点主管：一律先显示他的详情（心情/疲劳/信任/技能），不弹任何遮挡窗口
   if (window.OFFICE3D && window.OFFICE3D.ready && window.OFFICE3D.focusRoom) {
@@ -10023,23 +10362,18 @@ function assign(orderId, staffId, manualIds) {
 
 
 
-  const short = need - have;
-
-
-
-  if (short <= 0) {
-
-
-
-    toast(`「${o.title}」已经排了 ${have} 人，够用了`, "warn");
-
-
-
+  // 同一张单只能由一个组负责（可以给同组加人，但不能换组）
+  if (o.assignedTo && o.assignedTo !== staffId) {
+    toast(`「${o.title}」已经派给别的组了`, "warn");
     return;
-
-
-
   }
+  // 允许超编：最多需要人数的 2 倍（至少 +2），人多干得快
+  const maxCrew = Math.max(need + 2, Math.ceil(need * 2));
+  if (have >= maxCrew) {
+    toast(`「${o.title}」已经排了 ${have} 人，再多就浪费了（上限 ${maxCrew}）`, "warn");
+    return;
+  }
+  const short = Math.max(1, Math.min(maxCrew - have, need - have > 0 ? need - have : 2));
 
 
 
@@ -10093,7 +10427,7 @@ function assign(orderId, staffId, manualIds) {
 
 
 
-  const cost = picked.length * CFG.workerCompute;
+  const cost = crewCompute(picked);
 
 
 
@@ -10113,7 +10447,8 @@ function assign(orderId, staffId, manualIds) {
 
 
 
-  selOrder = null;
+  // 派完保留选中的订单，方便继续给他加人；派满了才取消选中
+  if (o.crew.length >= Math.max(need + 2, Math.ceil(need * 2))) selOrder = null;
 
 
 
@@ -10520,11 +10855,16 @@ function renderPicker() {
       <span class="pkname">${w.name}</span>
       <span class="pksk">技能 <b>${sk}</b></span>
       <span class="pkstam">体力 <b>${w.stamina}</b></span>
+      <span class="pksk">⚡ <b>${w.tier === "elite" ? 4 : (w.tier === "senior" ? 3 : 2)}</b></span>
       <span class="pkstate" style="color:${stCol}">${st}</span>
     </div>`;
   }).join("");
 
-  const cost = _pickSel.length * CFG.workerCompute;
+  const cost = _pickSel.reduce((a, id) => {
+    if (id.indexOf("ai:") === 0) return a + 3;
+    const ww = G.workers.find(x => x.id === id);
+    return a + (ww ? (ww.tier === "elite" ? 4 : (ww.tier === "senior" ? 3 : 2)) : 2);
+  }, 0);
   const html = `<div style="font-size:12.5px;color:#9fb3d4;margin-bottom:10px;line-height:1.7">
       订单：<b style="color:#fff">${o.title}</b> · 类型 ${CFG.types[o.type] ? CFG.types[o.type].name : o.type} · 需要 <b>${need}</b> 人<br>
       部门：<b style="color:#fff">${ai.name}</b> · 算力余额 ${G.compute}（最多派 ${afford} 人）
@@ -11258,6 +11598,7 @@ function endDay() {
 
 
     s.raiseCd = Math.max(0, s.raiseCd - 1);
+  (G.workers || []).forEach(w => { if (w.raiseCd > 0) w.raiseCd = Math.max(0, w.raiseCd - 1); });
 
 
 
@@ -11449,7 +11790,21 @@ function endDay() {
 
 
 
+  // 商店上新提示（当天刚解锁的道具）
+  try {
+    const _newItems = Object.keys(ITEMS).map((k) => ITEMS[k])
+      .filter((it) => it.unlockDay && it.unlockDay === (G.day + 1));
+    if (_newItems.length) {
+      G.shopNotice = _newItems.map((it) => `${it.icon} ${it.name}`).join("、");
+    }
+  } catch (e) {}
+  if (G.shopNotice) { setTimeout(() => { showShopNotice(G.shopNotice); G.shopNotice = null; save(); }, 700); }
+
   G.usedToday = 0;   // 新的一天，免费额度重置
+  G.quotaBoost = 0;  // 动员令只当天有效
+  // 昨天派出去还没干完的人，今天继续占着算力额度
+  const _leftBusy = (G.workers || []).filter((w) => w.busy).length;
+  G.quotaPenalty = _leftBusy * CFG.workerCompute;
 
 
 
@@ -11725,14 +12080,6 @@ function checkEnd() {
 
 
 
-    else if (G.cash > 5000000) ending = { t: "商业神话", d: "行业史上没人做到过。你把五个 AI 变成了一台印钞机。" };
-  else if (G.cash > 2000000) ending = { t: "行业龙头", d: "你成了行业第一，代价是所有人都累得说不出话。" };
-  else if (G.cash > 1000000) ending = { t: "小有成就", d: "账上过了百万，够在同行面前挺直腰板了。" };
-  else if (G.cash > 300000) ending = { t: "站稳脚跟", d: "活下来了，也攒下了一点家底。" };
-  else if (G.cash > 90000) ending = { t: "勉强糊口", d: "刚够发工资，再撑一百天也不会更好。" };
-
-
-
     else if (avg < 40) ending = { t: "黑心公司", d: "利润漂亮，员工麻木。有人把你的公司写成了反面教材。" };
 
 
@@ -11754,9 +12101,17 @@ function checkEnd() {
 
   if (ending) {
 
+  // 按评级取该难度专属的结局文案
+  if (ending && ending.rank) {
+    const _endSet = (CFG.rankEndings && CFG.rankEndings[CFG.diff.id]) || CFG.rankEndings.normal;
+    const _pair = _endSet[ending.rank] || _endSet.D || ["平稳收官", "不惊艳，但活下来了。"];
+    ending.t = _pair[0];
+    ending.d = _pair[1];
+  }
+  // 记录到结局图鉴
+  try { recordEnding(CFG.diff.id, ending.rank); } catch (e) {}
 
-
-    G.finished = true;
+  G.finished = true;
 
 
 
@@ -11802,6 +12157,8 @@ function checkEnd() {
 
 
 function showModal(title, html, acts) {
+  // 防止弹窗叠加：先把可能存在的旧层关掉
+  try { const _m = $("modal"); if (_m) _m.classList.remove("on"); } catch (e) {}
 
 
 
@@ -12123,7 +12480,7 @@ function makeWorker(ai, tier) {
 
 
 
-    wage: CFG.workerWage,
+    wage: tier.id === "elite" ? 150 : (tier.id === "senior" ? 60 : CFG.workerWage),
 
 
 
@@ -12239,7 +12596,7 @@ function overloadInfo() {
 
 
 
-  const over = Math.max(0, used - CFG.freeCompute);
+  const over = Math.max(0, used - effFreeCompute());
 
 
 
@@ -13207,6 +13564,15 @@ const ITEMS = {
 
 
 
+  cap: { id: "cap", icon: "⚡", name: "算力包", kind: "compute", color: "#7de3ff",
+    cost: 2500, unlockDay: 15,
+    desc: "立即 +30 算力，可囤着大批出动员工时用" },
+  capmax: { id: "capmax", icon: "🔋", name: "算力上限扩容", kind: "compute", color: "#8fe3ff",
+    cost: 9000, unlockDay: 50,
+    desc: "算力上限永久 +50，能存住更多算力" },
+  mobil: { id: "mobil", icon: "📢", name: "动员令", kind: "compute", color: "#ffc861",
+    cost: 4500, unlockDay: 30,
+    desc: "今日免费算力额度 +8，当天可以放开派人" },
   brk: { id: "brk", icon: "💎", name: "突破券", kind: "any", color: "#ff7bd0",
 
 
@@ -13324,6 +13690,25 @@ function buyItem(id) {
 
 
   const it = ITEMS[id];
+  // 算力类道具：买完就能用，不需要选人
+  if (it && it.kind === "compute") {
+    if (!takeBag(id)) { toast("背包里没有这个道具了", "bad"); return; }
+    if (id === "cap") {
+      G.compute = Math.min(CFG.maxCompute, G.compute + 30);
+      toast(`算力 +30 → ${Math.round(G.compute)}`, "");
+    } else if (id === "capmax") {
+      CFG.maxCompute = (CFG.maxCompute || 999) + 50;
+      toast(`算力上限 → ${CFG.maxCompute}`, "");
+    } else if (id === "mobil") {
+      G.quotaBoost = (G.quotaBoost || 0) + 8;
+      toast(`今日免费额度 +8`, "");
+    }
+    log(`⚡ 使用了「${it.name}」`);
+    save(); renderAll();
+    try { renderBag(); } catch (e) {}
+    try { renderBagPage(); } catch (e) {}
+    return;
+  }
 
 
 
@@ -13486,6 +13871,26 @@ function renderShop() {
   }
 
 
+
+  const cp = $("shopCompute");
+  if (cp) {
+    cp.innerHTML = ["cap", "capmax", "mobil"].filter((id) => isItemUnlocked(ITEMS[id])).map((id) => {
+      const it = ITEMS[id];
+      if (!it) return "";
+      const price = it.cost;
+      return `<div class="icard" onclick="buyItem('${id}')">
+        <div class="ic-icon">${it.icon}</div>
+        <div class="ic-main">
+          <div class="ic-name" style="color:${it.color}">${it.name}</div>
+          <div class="ic-desc">${it.desc}</div>
+        </div>
+        <div class="ic-price ${G.cash >= price ? "" : "cant"}">¥${price}</div>
+      </div>`;
+    }).join("");
+    if (!cp.innerHTML) {
+      cp.innerHTML = `<div style="padding:10px 4px;font-size:12px;color:#7f93b8">还没有解锁算力道具，继续经营吧～</div>`;
+    }
+  }
 
   const wk = $("shopWorker");
 
@@ -14329,7 +14734,7 @@ function hireTo(aiId) {
 
 
 
-    `<span style="color:#8ea3c9;font-size:12px">${ai.name} 现有 ${cnt} 人 → ${cnt + 1} 人，每天多付 ¥${CFG.workerWage} 工资。</span>`,
+    `<span style="color:#8ea3c9;font-size:12px">${ai.name} 现有 ${cnt} 人 → ${cnt + 1} 人，每天多付 ¥${t.id === "elite" ? 150 : (t.id === "senior" ? 60 : CFG.workerWage)} 工资。</span>`,
 
 
 
@@ -15391,153 +15796,48 @@ function introPrev() {
 
 
 const GUIDE_STEPS = [
-
-
-
   {
-
-
-
     sel: "#orders",
-
-
-
     t: "① 先点一张订单",
-
-
-
-    d: "左边是订单大厅。点任意一张卡片把它选中。",
-
-
-
+    d: "左边是订单大厅。点任意一张卡片把它选中——选中的卡片会亮起来。",
     wait: "orderSelected",
-
-
-
   },
-
-
-
   {
-
-
-
-    sel: "#floor",
-
-
-
-    t: "② 再点一名员工",
-
-
-
-    d: "点一个工位，就把这单派出去了。派错了能在订单卡上撤回。",
-
-
-
+    sel: ".sceneWrap",
+    t: "② 点房间里主管的头像",
+    d: "3D 办公室里每个玻璃房上飘着一个头像。点它就弹出这位主管的状态卡：心情、疲劳、信任、技能，还能当场派单。",
     wait: "orderAssigned",
-
-
-
   },
-
-
-
   {
-
-
-
     sel: "#btnEnd",
-
-
-
     t: "③ 点这里结束今天",
-
-
-
     d: "右下角按钮。会结算交付、发工资、扣房租，然后进入第 2 天。",
-
-
-
     wait: "dayEnded",
-
-
-
   },
-
-
-
   {
-
-
-
     sel: ".res",
-
-
-
     t: "④ 这排是公司的命脉",
-
-
-
-    d: "资金 / 算力 / 口碑 / 士气 / 投资人信心。点它们能看解释。",
-
-
-
+    d: "资金 / 算力 / 口碑 / 士气 / 投资人信心。算力每天只有有限的免费额度，昨天没干完的活会占用今天的额度（数字后面会标红色 -N）。",
     wait: "next",
-
-
-
   },
-
-
-
   {
-
-
-
     sel: "#panel",
-
-
-
-    t: "⑤ 点开一个 AI 试试",
-
-
-
-    d: "点任意 AI 卡，右侧会显示它的技能和管理手段：咖啡 / 休息 / 谈话 / 加薪。",
-
-
-
+    t: "⑤ 主管的四个管理手段",
+    d: "点主管后右侧能看到：咖啡（回心情）/ 休息一天（清疲劳）/ 谈话（涨信任）/ 加薪（涨日薪）。组员也能加薪，价格和涨幅按档次走。",
     wait: "next",
-
-
-
   },
-
-
-
   {
-
-
-
     sel: ".hrEntry",
-
-
-
     t: "⑥ 这里是成长的地方",
-
-
-
-    d: "管理中心：招聘、管人、买道具。上面的背包用来给员工和主管升技能。",
-
-
-
+    d: "管理中心：招聘、管人、买道具。普通 / 资深 / 顶尖三档，招募价越高日薪越高，但技能也越强。",
     wait: "next",
-
-
-
   },
-
-
-
+  {
+    sel: ".chip",
+    t: "⑦ 目标：活满 100 天",
+    d: "结束后按现金评级：S / A / B / C，低于保底线算破产。顶栏的「📖 图鉴」能看所有结局和达成条件，集齐 15 个就是全成就。",
+    wait: "next",
+  },
 ];
 
 
@@ -16476,6 +16776,8 @@ window.onerror = function (msg, url, line) {
   return false;
 };
 </script>
+
+
 </body>
 
 
