@@ -7633,7 +7633,7 @@ function renderPanel() {
 
 
 
-      ${selOrder ? `<button class="pickbtn" onclick="assign(${selOrder}, '${s.id}')" onmouseenter="showActionTip('pickTeam')" onmouseleave="hideActionTip()">👥 让 ${s.name} 挑人做当前订单</button>` : ""}
+      ${selOrder ? `<button class="pickbtn" onclick="showWorkerPicker(${selOrder}, '${s.id}')" onmouseenter="showActionTip('pickTeam')" onmouseleave="hideActionTip()">👥 让 ${s.name} 挑人做当前订单</button>` : ""}
 
 
 
@@ -9688,31 +9688,15 @@ function cancelAssign() {
 function openRoom(id) {
   console.log("[openRoom]", id, "3D ready=", !!(window.OFFICE3D && window.OFFICE3D.ready));
   // 不切换视图，只推近 3D 相机；绝对不重绘 DOM（重绘会把 canvas 干掉）
-  // 已选订单：点主管 → 选中他，然后弹员工列表让你自己挑人
-  if (selOrder) {
+  // 点主管：一律先显示他的详情（心情/疲劳/信任/技能），不弹任何遮挡窗口
+  if (window.OFFICE3D && window.OFFICE3D.ready && window.OFFICE3D.focusRoom) {
     selStaff = id;
     selWorker = null;
-    try { if (window.OFFICE3D && window.OFFICE3D.focusRoom) window.OFFICE3D.focusRoom(id); } catch (e) {}
-    try { renderPanel(); } catch (e) {}
+    try { window.OFFICE3D.focusRoom(id); } catch (e) { console.warn(e); }
+    try { showRoomBar(id); } catch (e) {}
+    try { renderPanel(); } catch (e) { console.warn("panel", e); }
     try { renderSelbar(); } catch (e) {}
     syncAnchors3D();
-
-    const o = G.orders.find((x) => x.id === selOrder);
-    const ai = G.staff.find((x) => x.id === id);
-    if (o && ai) {
-      const ordId = o.id, staffId = id;
-      setTimeout(() => {
-        if (ai.resting) {
-          showConfirm(`${ai.name} 整个组在休息`,
-            `要取消休息，让 ${ai.name} 挑人接下「${o.title}」吗？`,
-            () => { ai.resting = false; showWorkerPicker(ordId, staffId); }, "取消休息再挑人");
-          return;
-        }
-        const freeCount = G.workers.filter((w) => w.aiId === staffId && !w.busy && !w.mustRest).length;
-        if (!freeCount) { toast(`${ai.name} 手下的人全在忙`, "warn"); return; }
-        showWorkerPicker(ordId, staffId);
-      }, 90);
-    }
     return;
   }
   if (window.OFFICE3D && window.OFFICE3D.ready && window.OFFICE3D.focusRoom) {
