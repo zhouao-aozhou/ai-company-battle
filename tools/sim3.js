@@ -3,9 +3,23 @@ const fs = require('fs');
 const vm = require('vm');
 
 const html = fs.readFileSync(process.argv[2], 'utf8');
-const m = html.match(/<script>([\s\S]*?)<\/script>/);
-if (!m) { console.error('找不到 <script>'); process.exit(1); }
-let code = m[1];
+const htmlPath2 = process.argv[2] || 'index.html';
+const pathMod = require('path');
+const htmlDir = pathMod.dirname(pathMod.resolve(htmlPath2));
+const htmlRaw = fs.readFileSync(htmlPath2, 'utf8');
+let code = '';
+const srcs = [...htmlRaw.matchAll(/<script src="\.\/([^"]+)"[^>]*><\/script>/g)].map(x => x[1]);
+if (srcs.length) {
+  for (const rel of srcs) {
+    const fp = pathMod.resolve(htmlDir, rel);
+    if (fs.existsSync(fp)) code += '\n/* ==== ' + rel + ' ==== */\n' + fs.readFileSync(fp, 'utf8');
+  }
+}
+if (!code.trim()) {
+  const m2 = htmlRaw.match(/<script>([\s\S]*?)<\/script>/);
+  if (!m2) { console.error('找不到 <script>'); process.exit(1); }
+  code = m2[1];
+}
 
 code += `\n;globalThis.__api = {
   get: () => G,

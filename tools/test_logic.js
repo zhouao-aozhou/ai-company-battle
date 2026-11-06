@@ -2,10 +2,26 @@
 const fs = require('fs');
 const vm = require('vm');
 
-const html = fs.readFileSync(process.argv[2], 'utf8');
-const m = html.match(/<script>([\s\S]*?)<\/script>/);
-if (!m) { console.error('找不到 <script>'); process.exit(1); }
-let code = m[1];
+const htmlPath = process.argv[2] || 'index.html';
+const path = require('path');
+const htmlDir = path.dirname(path.resolve(htmlPath));
+let code = '';
+
+// 优先读拆开后的 js 文件（按 index.html 里的引用顺序）
+const htmlRaw = fs.readFileSync(htmlPath, 'utf8');
+const srcs = [...htmlRaw.matchAll(/<script src="\.\/([^"]+)"[^>]*><\/script>/g)].map(m => m[1]);
+if (srcs.length) {
+  for (const rel of srcs) {
+    const fp = path.resolve(htmlDir, rel);
+    if (fs.existsSync(fp)) code += '\n/* ==== ' + rel + ' ==== */\n' + fs.readFileSync(fp, 'utf8');
+  }
+}
+// 退回老方式：读内联 <script>
+if (!code.trim()) {
+  const m = htmlRaw.match(/<script>([\s\S]*?)<\/script>/);
+  if (!m) { console.error('找不到 <script>'); process.exit(1); }
+  code = m[1];
+}
 
 code += `\n;globalThis.__api = {
   get: () => G,
