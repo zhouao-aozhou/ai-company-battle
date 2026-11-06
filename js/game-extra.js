@@ -891,40 +891,7 @@ function buyItem(id) {
 
 
   const it = ITEMS[id];
-  // 算力类道具：买完就能用，不需要选人
-  if (it && it.kind === "compute") {
-    if (!takeBag(id)) { toast("背包里没有这个道具了", "bad"); return; }
-    if (id === "boost") {
-      G.orders.forEach((o) => { if ((o.progress || 0) > 0 && (o.progress || 0) < 100) o.progress = Math.min(100, (o.progress || 0) + 15); });
-      toast("在手订单进度 +15%", "");
-    } else if (id === "shield") {
-      G.shield = (G.shield || 0) + 1;
-      toast("获得 1 次逾期免罚", "");
-    } else if (id === "invite") {
-      spawnOrder();
-      toast("来了一张新订单", "");
-    } else if (id === "tea") {
-      G.staff.forEach((s) => { s.mood = clamp(s.mood + 10); });
-      toast("全体主管心情 +10", "");
-    } else if (id === "supply") {
-      G.workers.forEach((w) => { w.stamina = Math.min(100, w.stamina + 22); });
-      toast("全体组员体力 +22", "");
-    } else if (id === "cap") {
-      G.compute = Math.min(CFG.maxCompute, G.compute + 30);
-      toast(`算力 +30 → ${Math.round(G.compute)}`, "");
-    } else if (id === "capmax") {
-      CFG.maxCompute = (CFG.maxCompute || 999) + 50;
-      toast(`算力上限 → ${CFG.maxCompute}`, "");
-    } else if (id === "mobil") {
-      G.quotaBoost = (G.quotaBoost || 0) + 8;
-      toast(`今日免费额度 +8`, "");
-    }
-    log(`⚡ 使用了「${it.name}」`);
-    save(); renderAll();
-    try { renderBag(); } catch (e) {}
-    try { renderBagPage(); } catch (e) {}
-    return;
-  }
+  
 
 
 
@@ -1345,6 +1312,47 @@ function useItem(id) {
 
 
   if (!it || bagOf(id) <= 0) return;
+
+
+
+  // 算力 / 增益类道具：点一下直接生效，不需要选人
+  if (it.kind === "compute") {
+    if (!takeBag(id)) { toast("背包里没有这个道具了", "bad"); return; }
+    if (id === "cap") {
+      G.compute = Math.min(CFG.maxCompute, G.compute + 30);
+      toast(`算力 +30 → ${Math.round(G.compute)}`, "");
+    } else if (id === "capmax") {
+      CFG.maxCompute = (CFG.maxCompute || 999) + 50;
+      toast(`算力上限 → ${CFG.maxCompute}`, "");
+    } else if (id === "mobil") {
+      G.quotaBoost = (G.quotaBoost || 0) + 8;
+      toast("今日免费额度 +8", "");
+    } else if (id === "boost") {
+      let cnt = 0;
+      G.orders.forEach((o) => {
+        const pg = o.progress || 0;
+        if (pg > 0 && pg < 100) { o.progress = Math.min(100, pg + 15); cnt++; }
+      });
+      toast(cnt ? `${cnt} 张单进度 +15%` : "没有进行中的订单", cnt ? "" : "warn");
+    } else if (id === "shield") {
+      G.shield = (G.shield || 0) + 1;
+      toast(`逾期免罚 ${G.shield} 次`, "");
+    } else if (id === "invite") {
+      if (typeof spawnOrder === "function") spawnOrder();
+      toast("来了一张新订单", "");
+    } else if (id === "tea") {
+      G.staff.forEach((s) => { s.mood = clamp(s.mood + 10); });
+      toast("全体主管心情 +10", "");
+    } else if (id === "supply") {
+      G.workers.forEach((w) => { w.stamina = Math.min(100, w.stamina + 22); });
+      toast("全体组员体力 +22", "");
+    }
+    log(`⚡ 使用了「${it.name}」`);
+    save(); renderAll();
+    try { renderBag(); } catch (e) {}
+    try { renderBagPage(); } catch (e) {}
+    return;
+  }
 
 
 
