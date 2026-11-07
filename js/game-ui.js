@@ -1116,55 +1116,34 @@ function showLeaderCard(id) {
 function openRoom(id) {
   console.log("[openRoom]", id, "3D ready=", !!(window.OFFICE3D && window.OFFICE3D.ready));
   try { if (typeof releasePending === "function") releasePending(); } catch (e) {}
+
+  const is3D = document.body && document.body.classList.contains("scene");
+
   selStaff = id;
   selWorker = null;
+
+  if (is3D) {
+    // 3D 下：详情卡已经把所有信息给全了，右侧面板退回「公司概况」，
+    // 避免同一个主管在两处重复显示、按钮也重复一遍
+    try {
+      const _keep = selStaff;
+      selStaff = null;
+      renderPanel();
+      selStaff = _keep;
+    } catch (e) {}
+    try { showLeaderCard(id); } catch (e) { console.warn("card", e); }
+    try { if (window.OFFICE3D && window.OFFICE3D.focusRoom) window.OFFICE3D.focusRoom(id); } catch (e) {}
+    try { showRoomBar(id); } catch (e) {}
+    syncAnchors3D();
+    return;
+  }
+
+  // 2D 下：面板 + 详情卡都保留
   try { renderPanel(); } catch (e) {}
   try { showLeaderCard(id); } catch (e) { console.warn("card", e); }
   try { if (window.OFFICE3D && window.OFFICE3D.focusRoom) window.OFFICE3D.focusRoom(id); } catch (e) {}
   try { showRoomBar(id); } catch (e) {}
   syncAnchors3D();
-  return;
-  // 不切换视图，只推近 3D 相机；绝对不重绘 DOM（重绘会把 canvas 干掉）
-  // 点主管：一律先显示他的详情（心情/疲劳/信任/技能），不弹任何遮挡窗口
-  if (window.OFFICE3D && window.OFFICE3D.ready && window.OFFICE3D.focusRoom) {
-    selStaff = id;
-    selWorker = null;
-    try { window.OFFICE3D.focusRoom(id); } catch (e) { console.warn(e); }
-    try { showRoomBar(id); } catch (e) {}
-    try { renderPanel(); } catch (e) { console.warn("panel", e); }
-    try { renderSelbar(); } catch (e) {}
-    syncAnchors3D();
-    return;
-  }
-  if (window.OFFICE3D && window.OFFICE3D.ready && window.OFFICE3D.focusRoom) {
-    selStaff = id;
-    selWorker = null;
-    try { window.OFFICE3D.focusRoom(id); } catch (e) { console.warn(e); }
-    try { showRoomBar(id); } catch (e) {}
-    try { renderPanel(); } catch (e) {}
-    try { renderSelbar(); } catch (e) {}
-    syncAnchors3D();
-    return;
-  }
-
-
-
-  roomFocus = id;
-
-
-
-  selStaff = id;
-
-
-
-  selWorker = null;
-
-
-
-  renderAll();
-
-
-
 }
 
 
