@@ -1199,7 +1199,7 @@ function spawnOrder() {
 
 
 
-  let need = Math.round(stars * 13 * CFG.diff.needMul);
+  let need = Math.round(stars * 21 * CFG.diff.needMul);   // 工作量：配合更高的人数需求
 
 
 
@@ -1235,7 +1235,7 @@ function spawnOrder() {
 
 
 
-    reward: Math.round((stars * 800 + rnd(0, 250)) * CFG.diff.rewardMul * (1 + ((G.day || 1) - 1) * 0.06)),
+    reward: Math.round((stars * 1250 + rnd(0, 250)) * CFG.diff.rewardMul * (1 + ((G.day || 1) - 1) * 0.06)),
 
 
 
@@ -1323,11 +1323,11 @@ function spawnOrder() {
 
 
 
-      o.need = Math.round(o.stars * 13 * CFG.diff.needMul);
+      o.need = Math.round(o.stars * 21 * CFG.diff.needMul);
 
 
 
-      o.reward = Math.round((o.stars * 800 + rnd(0, 250)) * CFG.diff.rewardMul * (1 + ((G.day || 1) - 1) * 0.06));
+      o.reward = Math.round((o.stars * 1250 + rnd(0, 250)) * CFG.diff.rewardMul * (1 + ((G.day || 1) - 1) * 0.06));
 
 
 

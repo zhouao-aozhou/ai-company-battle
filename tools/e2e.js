@@ -11,7 +11,8 @@ let code = '';
 const srcs = [...htmlRaw.matchAll(/<script src="\.\/([^"]+)"[^>]*><\/script>/g)].map(x => x[1]);
 if (srcs.length) {
   for (const rel of srcs) {
-    const fp = pathMod.resolve(htmlDir, rel);
+    const fp = pathMod.resolve(htmlDir, rel.split("?")[0]);
+    if (rel.indexOf("sound.js") >= 0) continue;   // 音效模块依赖真实 DOM，测试时跳过
     if (fs.existsSync(fp)) code += '\n/* ==== ' + rel + ' ==== */\n' + fs.readFileSync(fp, 'utf8');
   }
 }
@@ -43,6 +44,7 @@ function fakeEl() {
 const store = {};
 const sandbox = {
   document: {
+    addEventListener() {}, removeEventListener() {}, dispatchEvent() { return true; }, visibilityState: 'visible',
     body: { classList: { add() {}, remove() {}, contains() { return false; } } },
     getElementById(id) { return store[id] || (store[id] = fakeEl()); },
     createElement() { return fakeEl(); },
@@ -54,9 +56,18 @@ const sandbox = {
     setItem(k, v) { this._d[k] = v; },
     removeItem(k) { delete this._d[k]; },
   },
-  setTimeout() {}, clearTimeout() {},
+  setTimeout() {}, clearTimeout() {}, setInterval() { return 0; }, clearInterval() {},
+  requestAnimationFrame() { return 0; }, cancelAnimationFrame() {},
+  window: null,   // 下面指回 sandbox 自己
+  navigator: { userAgent: "node" },
+  AudioContext: null,
+  performance: { now: () => Date.now() },
   console, Math, JSON, Date, Number, Object, Array, String,
 };
+sandbox.window = sandbox;
+sandbox.addEventListener = function () {};
+sandbox.removeEventListener = function () {};
+sandbox.dispatchEvent = function () { return true; };
 vm.createContext(sandbox);
 vm.runInContext(code, sandbox);
 

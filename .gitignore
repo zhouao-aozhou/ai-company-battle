@@ -3,3 +3,11 @@ AI公司大作战-单文件.html
 game.html
 backups/
 *.log
+
+# 本地备份（不上传）
+_backup*/
+_index_before_auto.html
+tools/auto_test.html
+tools/desk_compare.html
+tools/preview_items.html
+tools/models/

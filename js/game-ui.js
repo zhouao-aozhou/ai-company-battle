@@ -511,6 +511,26 @@ function selectWorkerInRoom(wid) {
 
 let scene3dBusy = false;
 
+/* 页面切回前台时检查 3D 是否还活着，丢了就重建（防止休眠/切标签后卡死） */
+document.addEventListener("visibilitychange", function () {
+  if (document.visibilityState !== "visible") return;
+  try {
+    if (!document.body.classList.contains("scene")) return;
+    const cv = document.querySelector(".scene3d canvas");
+    if (!cv) return;
+    const gl = cv.getContext && (cv.getContext("webgl2") || cv.getContext("webgl"));
+    if (gl && gl.isContextLost && gl.isContextLost()) {
+      console.warn("[3D] 上下文丢失，重建场景");
+      scene3dBusy = false;
+      const box = document.querySelector(".scene3d");
+      if (box) box.innerHTML = "";
+      if (window.OFFICE3D && window.OFFICE3D.ready === false) { /* 已标记 */ }
+      try { if (window.OFFICE3D && window.OFFICE3D.reset) window.OFFICE3D.reset(); } catch (e) {}
+      mountScene3D();
+    }
+  } catch (e) {}
+});
+
 function mountScene3D() {
   if (typeof document === "undefined" || !document.querySelector) return;
   const el = document.querySelector(".scene3d");
@@ -528,7 +548,7 @@ function mountScene3D() {
       scene3dBusy = false;
       syncAnchors3D();
       // 切换皮肤后布局要过几帧才定下来，多补几次尺寸，避免画面先放大再缩回去
-      [0, 50, 140, 300, 520].forEach((ms) => {
+      [0, 50, 140, 300, 520, 900, 1500].forEach((ms) => {
         setTimeout(() => {
           try {
             if (window.OFFICE3D && window.OFFICE3D.resize) window.OFFICE3D.resize();
@@ -543,51 +563,38 @@ function mountScene3D() {
 
 
 if (typeof window !== "undefined") window.__syncAnchors = () => syncAnchors3D();
+let _anchorLast = 0;
+
 function syncAnchors3D() {
-
   if (typeof document === "undefined" || !document.querySelector) return;
-
   if (!window.OFFICE3D || !window.OFFICE3D.ready) return;
 
   const wrap = document.querySelector(".scene3d");
-
   if (!wrap) return;
-
   const w = wrap.clientWidth, h = wrap.clientHeight;
-
   if (!w || !h) return;
 
-  document.querySelectorAll(".sceneChar").forEach((node) => {
-
+  // 每次都实时查询：缓存过 DOM 重建后会指向已删除的旧节点，
+  // 新节点拿不到 left/top，全部堆在左上角（员工叠一起就是这个原因）
+  document.querySelectorAll(".sceneChar").forEach(function (node) {
     const id = node.getAttribute("data-ai");
-
     if (!id) return;
-
     const p2 = window.OFFICE3D.anchorOf(id);
-
+    if (!p2) return;
     node.style.left = (p2.x / w * 100).toFixed(3) + "%";
-
     node.style.top = (p2.y / h * 100).toFixed(3) + "%";
-
   });
 
-  document.querySelectorAll(".sceneWorker").forEach((node) => {
-
+  document.querySelectorAll(".sceneWorker").forEach(function (node) {
     const id = node.getAttribute("data-ai");
-
     const k = parseInt(node.getAttribute("data-k") || "0", 10);
-
     if (!id || !window.OFFICE3D.staffAnchor) return;
-
     const total = parseInt(node.getAttribute("data-total") || "0", 10) || 0;
     const p2 = window.OFFICE3D.staffAnchor(id, k, total);
-
+    if (!p2) return;
     node.style.left = (p2.x / w * 100).toFixed(3) + "%";
-
     node.style.top = (p2.y / h * 100).toFixed(3) + "%";
-
   });
-
 }
 
 
@@ -744,7 +751,7 @@ let sceneZoom = 1, scenePanX = 0, scenePanY = 0;
 
 
 
-const ZOOM_MIN = 0.6, ZOOM_MAX = 2.2;
+const ZOOM_MIN = 0.85, ZOOM_MAX = 2.2;   // 和 office3d 的默认值保持一致
 
 
 
@@ -756,23 +763,21 @@ function setSceneZoom(z, keepPan) {
 
 
 
-  sceneZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
-
-
+  sceneZoom = Math.max(0.05, Math.min(12, z));   // 放开范围，不做闪烁提示
 
   if (!keepPan) { scenePanX = 0; scenePanY = 0; }
 
 
 
-  try { localStorage.setItem("aicompany_zoom", String(sceneZoom)); } catch (e) {}
+  try { localStorage.removeItem("aicompany_zoom"); } catch (e) {}   // 视角不持久化，每次进来都是安全的默认值
 
 
 
-  const f = $("floor");
-
-
-
-  if (f) fitScene(f);
+  // 3D 模式下不去碰 2D 的 stage 布局（会触发重排，缩放时看着像闪）
+  if (!document.body.classList.contains("scene")) {
+    const f = $("floor");
+    if (f) fitScene(f);
+  }
 
 
 
@@ -850,7 +855,7 @@ function showAssignPreview(orderId, staffId) {
     toast(`${ai.name} 手下的人全在忙，先等结算`, "warn");
     return false;
   }
-  const need = Math.max(1, o.stars, o.minCrew || 1) - o.crew.length;
+  const need = Math.max(2, Math.round(o.stars * 1.7), o.minCrew || 1) - o.crew.length;
   if (need <= 0) {
     toast(`「${o.title}」已经够人了`, "warn");
     return false;
@@ -1431,7 +1436,7 @@ function assign(orderId, staffId, manualIds) {
 
 
 
-  const need = Math.max(1, o.stars, o.minCrew || 1);   // 这单要几个人
+  const need = Math.max(2, Math.round(o.stars * 1.7), o.minCrew || 1);   // 这单要几个人
 
 
 
@@ -1901,7 +1906,7 @@ function renderPicker() {
   const ai = G.staff.find((x) => x.id === _pickStaffId);
   if (!o || !ai) return;
   const team = G.workers.filter((w) => w.aiId === _pickStaffId);
-  const need = Math.max(1, o.stars, o.minCrew || 1) - o.crew.length;
+  const need = Math.max(2, Math.round(o.stars * 1.7), o.minCrew || 1) - o.crew.length;
   const afford = Math.floor(G.compute / CFG.workerCompute);
 
   // 主管本人（可以亲自上，消耗 3 算力）

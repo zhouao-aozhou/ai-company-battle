@@ -12,7 +12,8 @@ const htmlRaw = fs.readFileSync(htmlPath, 'utf8');
 const srcs = [...htmlRaw.matchAll(/<script src="\.\/([^"]+)"[^>]*><\/script>/g)].map(m => m[1]);
 if (srcs.length) {
   for (const rel of srcs) {
-    const fp = path.resolve(htmlDir, rel);
+    const fp = path.resolve(htmlDir, rel.split("?")[0]);   // 去掉 ?v= 版本号
+    if (rel.indexOf("sound.js") >= 0) continue;   // 音效模块依赖真实 DOM，测试时跳过
     if (fs.existsSync(fp)) code += '\n/* ==== ' + rel + ' ==== */\n' + fs.readFileSync(fp, 'utf8');
   }
 }
@@ -45,6 +46,7 @@ function fakeEl() {
 const store = {};
 const sandbox = {
   document: {
+    addEventListener() {}, removeEventListener() {}, dispatchEvent() { return true; }, visibilityState: 'visible',
     body: { classList: { add() {}, remove() {}, contains() { return false; } } },
     getElementById(id) { return store[id] || (store[id] = fakeEl()); },
     createElement() { return fakeEl(); },
@@ -56,9 +58,18 @@ const sandbox = {
     setItem(k, v) { this._d[k] = v; },
     removeItem(k) { delete this._d[k]; },
   },
-  setTimeout() {}, clearTimeout() {},
+  setTimeout() {}, clearTimeout() {}, setInterval() { return 0; }, clearInterval() {},
+  requestAnimationFrame() { return 0; }, cancelAnimationFrame() {},
+  window: null,   // 下面指回 sandbox 自己
+  navigator: { userAgent: "node" },
+  AudioContext: null,
+  performance: { now: () => Date.now() },
   console, Math, JSON, Date, Number, Object, Array, String,
 };
+sandbox.window = sandbox;
+sandbox.addEventListener = function () {};
+sandbox.removeEventListener = function () {};
+sandbox.dispatchEvent = function () { return true; };
 vm.createContext(sandbox);
 vm.runInContext(code, sandbox);
 
@@ -89,7 +100,7 @@ const c0 = G.compute;
 api.assign(o1.id, 'grok');
 G = api.get();
 const o1b = G.orders.find(o => o.id === o1.id);
-ok('按需求挑人（1~need）', o1b.crew.length >= 1 && o1b.crew.length <= Math.max(o1b.stars, o1b.minCrew || 1));
+ok('按需求挑人（1~need）', o1b.crew.length >= 1 && o1b.crew.length <= Math.max(2, Math.round(o1b.stars * 1.7), o1b.minCrew || 1));
 ok('订单归属 Grok', o1b.assignedTo === 'grok');
 ok('算力按人头扣', G.compute === c0 - o1b.crew.length * 2, c0 + ' -> ' + G.compute);
 ok('被挑中的人忙碌', G.workers.filter(w => w.busy === o1.id).length === o1b.crew.length);

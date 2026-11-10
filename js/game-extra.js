@@ -983,6 +983,7 @@ function doBuy(id, cost) {
 
 
 
+  if (window.SFX) SFX.coin();
   toast(`买到「${it.name}」，已放进背包`, "");
 
 

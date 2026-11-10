@@ -22,7 +22,7 @@
 
 
 
-<link rel="stylesheet" href="./styles.css">
+<link rel="stylesheet" href="./styles.css?v=2026110825200">
 
 
 
@@ -80,7 +80,8 @@
 
 
 
-    <button id="btnSkin" title="随时切换画面：3D 场景 ⇄ 2D 卡片">🎨 画面</button>
+    <button id="btnSound" title="开关音效和音乐" onclick="setSound(!isSoundOn())">🔊 声音</button>
+      <button id="btnSkin" title="随时切换画面：3D 场景 ⇄ 2D 卡片">🎨 画面</button>
 
 
 
@@ -628,15 +629,16 @@
 
 
 
-<script src="./js/game-core.js"></script>
-<script src="./js/game-ui.js"></script>
-<script src="./js/game-extra.js"></script>
+<script src="./js/sound.js?v=2026110825200"></script>
+<script src="./js/game-core.js?v=2026110825200"></script>
+<script src="./js/game-ui.js?v=2026110825200"></script>
+<script src="./js/game-extra.js?v=2026110825200"></script>
 
 
 
 <script type="module">
 
-import office3d from "./tools/office3d.js?v=22";
+import office3d from "./tools/office3d.js?v=2026110825200";
 
 window.OFFICE3D = office3d;
 
@@ -728,13 +730,18 @@ window.onerror = function (msg, url, line) {
       window.__bootReady = true;
     }, 180);
   }
-  // 启动屏期间就在后台把 3D 场景建好，点「开始游戏」时不会卡一下
+  // 3D 预热延后到 2.6 秒，并且只在浏览器空闲时做，
+  // 否则一打开就抢主线程，启动屏会卡
   setTimeout(function () {
-    try {
-      if (typeof applySkin === "function") applySkin("scene");
-      if (typeof mountScene3D === "function") mountScene3D();
-    } catch (e) {}
-  }, 600);
+    var warm = function () {
+      try {
+        if (typeof applySkin === "function") applySkin("scene");
+        if (typeof mountScene3D === "function") mountScene3D();
+      } catch (e) {}
+    };
+    if (window.requestIdleCallback) requestIdleCallback(warm, { timeout: 2500 });
+    else warm();
+  }, 2600);
 
   var timer = setInterval(function () {
     p = Math.min(90, p + 4 + Math.random() * 9);   // 最多只到 90%
@@ -770,6 +777,8 @@ function pickBootMode(m) {
 }
 
 function bootStart(fresh) {
+  // 用户点了按钮，浏览器才允许出声
+  try { if (window.startBgm) window.startBgm(); } catch (e) {}
   // 先把界面锁到过渡初始态（藏起来 + 场景模糊）
   document.body.classList.add("intro");
   var layer = document.getElementById("bootLayer");
@@ -786,6 +795,11 @@ function bootStart(fresh) {
       var _wait = setInterval(function () {
         if ((window.OFFICE3D && window.OFFICE3D.ready) || Date.now() - _t0 > 900) {
           clearInterval(_wait);
+          // 只重算画布，不要动镜头（动镜头会覆盖玩家自己的缩放）
+          try {
+            if (window.OFFICE3D && window.OFFICE3D.resize) window.OFFICE3D.resize();
+            if (typeof syncAnchors3D === "function") syncAnchors3D();
+          } catch (e) {}
           document.body.classList.remove("intro");
         }
       }, 60);
@@ -802,6 +816,10 @@ function bootStart(fresh) {
   } catch (e) {}
   // 启动屏淡出的同时，界面从四面八方滑入、场景对焦
   setTimeout(function () {
+    try {
+      if (window.OFFICE3D && window.OFFICE3D.resize) window.OFFICE3D.resize();
+      if (typeof syncAnchors3D === "function") syncAnchors3D();
+    } catch (e) {}
     document.body.classList.remove("intro");
   }, 260);
   // 新开一局：先问难度
@@ -916,6 +934,61 @@ function bootStart(fresh) {
   window.buildClouds = buildClouds;
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", buildClouds);
   else buildClouds();
+})();
+</script>
+<script>
+(function () {
+  function setCatCursor() {
+    var url = './assets/cursor_ds.png';
+    try {
+      document.documentElement.style.cursor = 'none';
+      document.body.style.cursor = 'none';
+      // 遍历一遍，给每个元素也写上，避免被局部样式覆盖
+      var all = document.querySelectorAll('button, .wrow, .icard, .sceneChar, .sceneWorker, .pickrow, .hrEntry, .chip, .order, [onclick]');
+      for (var i = 0; i < all.length; i++) {
+        all[i].style.cursor = 'none';
+      }
+    } catch (e) {}
+  }
+  document.addEventListener('DOMContentLoaded', setCatCursor);
+  // 每 2 秒补一次，应对动态渲染出来的元素
+  setInterval(setCatCursor, 2000);
+})();
+</script>
+<img id="cursorPet" src="./assets/cursor_pet.gif" alt="">
+<script>
+(function () {
+  var pet = document.getElementById("cursorPet");
+  if (!pet) return;
+  var canHover = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  if (!canHover) return;
+
+  var tx = -100, ty = -100, cx = -100, cy = -100, raf = null, shown = false;
+  var CLICKABLE = "a,button,.pickrow,.icard,.wrow,.chip,.order,.sceneChar,.sceneWorker,.bootBtn,.bootMode,[onclick]";
+
+  function tick() {
+    // 平滑跟随，带一点点延迟，像小宠物跟着鼠标
+    cx += (tx - cx) * 0.35;
+    cy += (ty - cy) * 0.35;
+    pet.style.transform = "translate(" + cx + "px," + cy + "px) translate(-50%,-50%)";
+    if (Math.abs(tx - cx) > 0.3 || Math.abs(ty - cy) > 0.3) {
+      raf = requestAnimationFrame(tick);
+    } else { raf = null; }
+  }
+
+  document.addEventListener("mousemove", function (e) {
+    tx = e.clientX; ty = e.clientY;
+    if (!shown) { shown = true; pet.classList.add("on"); cx = tx; cy = ty; }
+    var el = e.target;
+    var hit = el && el.closest && el.closest(CLICKABLE);
+    pet.classList.toggle("clickable", !!hit);
+    if (!raf) raf = requestAnimationFrame(tick);
+  }, { passive: true });
+
+  document.addEventListener("mousedown", function () { pet.classList.add("press"); });
+  document.addEventListener("mouseup", function () { pet.classList.remove("press"); });
+  document.addEventListener("mouseleave", function () { pet.classList.remove("on"); shown = false; });
+  document.addEventListener("mouseenter", function () { pet.classList.add("on"); shown = true; });
 })();
 </script>
 </body>

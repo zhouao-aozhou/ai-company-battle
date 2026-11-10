@@ -1058,18 +1058,19 @@ function buildLamps() {
 function applyView() {
   if (!renderer || !camera) return;
   const cv = renderer.domElement;
-  const w = parseFloat(cv.style.width) || cv.clientWidth || 1;
-  const h = parseFloat(cv.style.height) || cv.clientHeight || 1;
-  // 视野越小，画布倍率越大，避免边缘没渲染
-  const need = Math.min(3.2, Math.max(2.0, 1.1 / Math.max(0.2, zoom)));
-  if (Math.abs(need - RENDER_SCALE) > 0.05) {
-    RENDER_SCALE = need;
+  const w = (container && container.clientWidth) || 1;
+  const h = (container && container.clientHeight) || 1;
+  if (!w || !h) return;
+  // 渲染倍率固定：之前随 zoom 变化，每滚一格就重建一次画布 → 画面一闪一闪。
+  // 固定 2 倍后，缩放只改相机视野，画布尺寸不动，完全不闪。
+  if (Math.abs(RENDER_SCALE - 2.0) > 0.01) {
+    RENDER_SCALE = 2.0;
     resize();
     return;
   }
-  cv.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px))`;
+  cv.style.transform = `translate(${panX}px, ${panY}px)`;
   const aspect = w / h;
-  const hh = 16.875 * zoom * RENDER_SCALE;
+  const hh = 30 * zoom;   // 视野基准从 16.875 提到 30，才装得下整个办公室
   const hw = hh * aspect;
   camera.left = -hw; camera.right = hw;
   camera.top = hh; camera.bottom = -hh;
@@ -1094,13 +1095,14 @@ function resize() {
     // 尺寸没变就不重设
     if (cv.width !== w || cv.height !== h) {
       renderer.setSize(w, h, false);
-      cv.style.width = w + "px";
-      cv.style.height = h + "px";
-      cv.style.position = "absolute";
-      cv.style.left = "50%";
-      cv.style.top = "50%";
-      cv.style.maxWidth = "none";
     }
+    // CSS 尺寸每次都要设（画布物理尺寸可能没变，但 CSS 可能是旧值）
+    cv.style.width = cw + "px";
+    cv.style.height = ch + "px";
+    cv.style.position = "absolute";
+    cv.style.left = "0";
+    cv.style.top = "0";
+    cv.style.maxWidth = "none";
     applyView();
   });
 }
@@ -1109,12 +1111,10 @@ function project(x, y, z) {
   if (!camera || !renderer) return { x: 0, y: 0 };
   const v = new THREE.Vector3(x, y, z).project(camera);
   const cv = renderer.domElement;
-  const w = parseFloat(cv.style.width) || cv.clientWidth;
-  const h = parseFloat(cv.style.height) || cv.clientHeight;
   const cw = container.clientWidth, ch = container.clientHeight;
   return {
-    x: (v.x * 0.5 + 0.5) * w - (w - cw) / 2 + panX,
-    y: (-v.y * 0.5 + 0.5) * h - (h - ch) / 2 + panY,
+    x: (v.x * 0.5 + 0.5) * cw + panX,
+    y: (-v.y * 0.5 + 0.5) * ch + panY,
   };
 }
 
@@ -1130,7 +1130,7 @@ function staffAnchor(deptId, index, total) {
   const rows = Math.max(1, Math.ceil(n / perRow));
   const row = Math.floor(index / perRow);
   const col = index % perRow;
-  const sx = 1.75, sz = 1.5;
+  const sx = 3.2, sz = 2.6;   // 间距加大，避免组员在屏幕上挤成一团
   const ox = (col - (perRow - 1) / 2) * sx;
   const oz = (row - (rows - 1) / 2) * sz;
   return project(st.x + ox, 1.5, staffZ + oz);
@@ -1246,12 +1246,22 @@ export async function init(el) {
   if (ready) { resize(); return api; }
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(3, Math.max(2, window.devicePixelRatio || 1)));   // 至少 2x 超采样
+  renderer.setPixelRatio(1);   // 画布尺寸已经乘过 RENDER_SCALE，这里再乘就是双重放大（4 倍像素）
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.82;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // 容器尺寸一变就重算画布（进场时布局还没稳定，靠这个自动纠正）
+  try {
+    if (window.ResizeObserver && !container.__ro) {
+      container.__ro = new ResizeObserver(function () {
+        try { resize(); } catch (e) {}
+      });
+      container.__ro.observe(container);
+    }
+  } catch (e) {}
+
   const cw = container.clientWidth || 1200, ch = container.clientHeight || 700;
   renderer.setSize(cw * RENDER_SCALE, ch * RENDER_SCALE, false);
   container.appendChild(renderer.domElement);
