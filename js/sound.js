@@ -90,15 +90,18 @@
      所以第一个点击/触摸就把音频上下文建好、BGM 起来，
      这样从启动屏开始就有音乐和点击音。 */
   let _audioBooted = false;
+  let _lastBootTry = 0;
   function bootstrapAudio() {
     try {
-      getCtx();                       // 每次手势都 resume 一次，iOS 需要
+      getCtx();
       if (!enabled) return;
       const el = ensureAudioEl();
-      if (!el.paused && !el.ended) return;   // 已经在播就不管
+      if (!el.paused && !el.ended) return;   // 正在播就什么都不做
+      const now = Date.now();
+      if (now - _lastBootTry < 1200) return;  // 1.2 秒内不重复尝试，避免打断音频
+      _lastBootTry = now;
       _audioBooted = true;
       startBgm();
-      el.play().catch(function () {});       // 再补一次，手机上第一次常被拒
     } catch (e) {}
   }
   window.bootstrapAudio = bootstrapAudio;
@@ -145,6 +148,7 @@
     if (el.readyState < 2) {
       try { if (window.toast) toast("音乐加载中…", ""); } catch (e) {}
     }
+    try { startWatchdog(); } catch (e) {}
     const pr = el.play();
     if (pr && pr.then) {
       pr.then(function () {
@@ -244,6 +248,28 @@
         }
       } catch (e) {}
     }, 800);
+  });
+
+  /* 看门狗：手机省电策略会偷偷暂停音频，定期检查并恢复 */
+  let bgmWatchdog = null;
+  function startWatchdog() {
+    if (bgmWatchdog) return;
+    bgmWatchdog = setInterval(function () {
+      if (!enabled || !bgmAudio) return;
+      if (document.visibilityState !== "visible") return;
+      if (bgmAudio.paused && !bgmAudio.ended) {
+        bgmAudio.volume = 0.26;
+        bgmAudio.play().catch(function () {});
+      }
+    }, 2500);
+  }
+
+  /* 页面切回前台时立刻恢复 */
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && enabled && bgmAudio && bgmAudio.paused) {
+      bgmAudio.volume = 0.26;
+      bgmAudio.play().catch(function () {});
+    }
   });
 
   window.setSound = function (on) {
