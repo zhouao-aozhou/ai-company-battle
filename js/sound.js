@@ -3,11 +3,7 @@
    ========================================================= */
 (function () {
   let ctx = null;
-  let enabled = true;
-  try {
-    const saved = localStorage.getItem("aicompany_sound");
-    if (saved === "0") enabled = false;
-  } catch (e) {}
+  let enabled = true;   // 每次打开默认开声音（不再记忆静音，避免手机上被旧状态卡住）
 
   function getCtx() {
     if (!ctx) {
@@ -95,17 +91,21 @@
      这样从启动屏开始就有音乐和点击音。 */
   let _audioBooted = false;
   function bootstrapAudio() {
-    if (_audioBooted) return;
-    _audioBooted = true;
     try {
-      getCtx();
-      if (enabled) startBgm();
+      getCtx();                       // 每次手势都 resume 一次，iOS 需要
+      if (!enabled) return;
+      const el = ensureAudioEl();
+      if (!el.paused && !el.ended) return;   // 已经在播就不管
+      _audioBooted = true;
+      startBgm();
+      el.play().catch(function () {});       // 再补一次，手机上第一次常被拒
     } catch (e) {}
   }
   window.bootstrapAudio = bootstrapAudio;
 
-  ["pointerdown", "keydown", "touchstart"].forEach(function (ev) {
-    document.addEventListener(ev, bootstrapAudio, { once: true, passive: true });
+  // 手机浏览器只认 click / touchend 这种真实手势，pointerdown 常常不算
+  ["click", "touchend", "pointerup", "keydown"].forEach(function (ev) {
+    document.addEventListener(ev, bootstrapAudio, { passive: true });
   });
 
   /* ---------------- 背景音乐（合成，循环） ---------------- */
@@ -141,12 +141,22 @@
     const el = ensureAudioEl();
     if (bgmOn && !el.paused) return;
     bgmOn = true;
-    el.volume = 0.26;              // 直接给音量，不做淡入（rAF 被节流时淡入会卡在 0）
+    el.volume = 0.26;
+    if (el.readyState < 2) {
+      try { if (window.toast) toast("音乐加载中…", ""); } catch (e) {}
+    }
     const pr = el.play();
-    if (pr && pr.catch) {
-      pr.catch(function (err) {
+    if (pr && pr.then) {
+      pr.then(function () {
+        try { if (window.toast) toast("音乐开始播放", ""); } catch (e) {}
+      }).catch(function (err) {
         bgmOn = false;
-        console.warn("[BGM] 播放被拒绝:", err && err.name);
+        const name = (err && err.name) || "未知";
+        let msg = "音乐播放失败: " + name;
+        if (name === "NotAllowedError") msg = "需要先点一下屏幕才能放音乐";
+        if (name === "NotSupportedError") msg = "这个浏览器不支持该音频格式";
+        try { if (window.toast) toast(msg, "warn"); } catch (e) {}
+        console.warn("[BGM]", msg);
       });
     }
   }
@@ -219,10 +229,34 @@
   }, true);
 
   /* 开关 */
+  /* 页面一加载就试着播（静音模式先播，解锁后再开声音） —— 某些手机认这招 */
+  document.addEventListener("DOMContentLoaded", function () {
+    setTimeout(function () {
+      try {
+        const el = ensureAudioEl();
+        el.muted = true;
+        const pr = el.play();
+        if (pr && pr.then) {
+          pr.then(function () {
+            // 静音播放成功 → 说明浏览器放行，只是需要用户手势才能开声音
+            setTimeout(function () { el.muted = false; el.volume = 0.26; }, 300);
+          }).catch(function () {});
+        }
+      } catch (e) {}
+    }, 800);
+  });
+
   window.setSound = function (on) {
     enabled = !!on;
     try { localStorage.setItem("aicompany_sound", enabled ? "1" : "0"); } catch (e) {}
-    if (enabled) { SFX.select(); startBgm(); } else { stopBgm(); }
+    if (enabled) {
+      SFX.select();
+      startBgm();
+      try { if (window.toast) toast("音效已开启", ""); } catch (e) {}
+    } else {
+      stopBgm();
+      try { if (window.toast) toast("已静音", ""); } catch (e) {}
+    }
     const b = document.getElementById("btnSound");
     if (b) b.textContent = enabled ? "🔊 音效" : "🔇 静音";
   };
